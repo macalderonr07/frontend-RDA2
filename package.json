@@ -11,7 +11,7 @@
     "verificar:sin-api": "node scripts/verificar-sin-api.mjs"
   },
   "devDependencies": {
-    "axe-core": "^4.13.0",
+    "axe-core": "^4.14.1",
     "playwright": "^1.63.0"
   }
 }
