@@ -1,0 +1,685 @@
+/* ==========================================================================
+   Administración Comercial Elite — capa propia sobre Bootstrap 5.3
+   --------------------------------------------------------------------------
+   - Layout con CSS Grid adaptable: encabezado / menú / contenido / pie.
+     En pantallas chicas el menú pasa a ser un offcanvas de Bootstrap.
+   - Colores de marca (verde del logo) con contraste WCAG 2.2 AA medido:
+       claro:  primario #3A5214 + texto #FFFFFF  8.76:1 · enlaces #3A5214 sobre #FFFFFF 8.76:1
+               cabecera #14170F + texto #FFFFFF 18.12:1
+       oscuro: primario #A6D161 + texto #14170F  10.28:1 · enlaces #A6D161 sobre #16190F 10.10:1
+               botones de contorno: secundario #ADB5BD 8.58:1 · peligro #EA868F 7.04:1
+   - Foco visible reforzado (WCAG 2.4.7 / 2.4.13): contorno de 3px con
+     separación, nunca se elimina.
+   - Objetivos táctiles de al menos 44px (2.5.8 pide 24px; se va más allá).
+   ========================================================================== */
+
+:root,
+[data-bs-theme="light"] {
+  --ce-primario: #3a5214;
+  --ce-primario-hover: #2b3913;
+  --ce-texto-sobre-primario: #ffffff;
+  --ce-cabecera: #14170f;
+  --ce-menu-fondo: #f1f5ea;
+  --ce-menu-activo: #dfe9cc;
+  --ce-foco: #1a5fb4;
+  --bs-primary: #3a5214;
+  --bs-primary-rgb: 58, 82, 20;
+  --bs-link-color: #3a5214;
+  --bs-link-color-rgb: 58, 82, 20;
+  --bs-link-hover-color: #2b3913;
+  --bs-link-hover-color-rgb: 43, 57, 19;
+  --bs-body-bg: #ffffff;
+}
+
+[data-bs-theme="dark"] {
+  --ce-primario: #a6d161;
+  --ce-primario-hover: #bfe08a;
+  --ce-texto-sobre-primario: #14170f;
+  --ce-cabecera: #0b0d08;
+  --ce-menu-fondo: #1d2214;
+  --ce-menu-activo: #2c3a17;
+  --ce-foco: #8ab4f8;
+  --bs-primary: #a6d161;
+  --bs-primary-rgb: 166, 209, 97;
+  --bs-link-color: #a6d161;
+  --bs-link-color-rgb: 166, 209, 97;
+  --bs-link-hover-color: #bfe08a;
+  --bs-link-hover-color-rgb: 191, 224, 138;
+  --bs-body-bg: #16190f;
+  --bs-body-color: #e8eee0;
+  --bs-secondary-color: #c3ccb6;
+}
+
+/* Botón primario con los colores de marca (Bootstrap usa variables por botón) */
+.btn-primary {
+  --bs-btn-bg: var(--ce-primario);
+  --bs-btn-border-color: var(--ce-primario);
+  --bs-btn-color: var(--ce-texto-sobre-primario);
+  --bs-btn-hover-bg: var(--ce-primario-hover);
+  --bs-btn-hover-border-color: var(--ce-primario-hover);
+  --bs-btn-hover-color: var(--ce-texto-sobre-primario);
+  --bs-btn-active-bg: var(--ce-primario-hover);
+  --bs-btn-active-border-color: var(--ce-primario-hover);
+  --bs-btn-active-color: var(--ce-texto-sobre-primario);
+  --bs-btn-disabled-bg: var(--ce-primario);
+  --bs-btn-disabled-border-color: var(--ce-primario);
+  --bs-btn-disabled-color: var(--ce-texto-sobre-primario);
+}
+.btn-outline-primary {
+  --bs-btn-color: var(--ce-primario);
+  --bs-btn-border-color: var(--ce-primario);
+  --bs-btn-hover-bg: var(--ce-primario);
+  --bs-btn-hover-border-color: var(--ce-primario);
+  --bs-btn-hover-color: var(--ce-texto-sobre-primario);
+  --bs-btn-active-bg: var(--ce-primario-hover);
+  --bs-btn-active-color: var(--ce-texto-sobre-primario);
+}
+/* En oscuro, los botones de contorno de Bootstrap conservan colores pensados
+   para fondo claro (#6c757d da 3.79:1 sobre #16190f): se aclaran. */
+[data-bs-theme="dark"] .btn-outline-secondary {
+  --bs-btn-color: #adb5bd;
+  --bs-btn-border-color: #adb5bd;
+  --bs-btn-hover-bg: #adb5bd;
+  --bs-btn-hover-border-color: #adb5bd;
+  --bs-btn-hover-color: #14170f;
+  --bs-btn-active-bg: #c3ccb6;
+  --bs-btn-active-color: #14170f;
+}
+[data-bs-theme="dark"] .btn-outline-danger {
+  --bs-btn-color: #ea868f;
+  --bs-btn-border-color: #ea868f;
+  --bs-btn-hover-bg: #ea868f;
+  --bs-btn-hover-border-color: #ea868f;
+  --bs-btn-hover-color: #14170f;
+  --bs-btn-active-bg: #f1aeb5;
+  --bs-btn-active-color: #14170f;
+}
+[data-bs-theme="dark"] .text-danger {
+  color: #ea868f !important;
+}
+
+.page-item.active .page-link {
+  background-color: var(--ce-primario);
+  border-color: var(--ce-primario);
+  color: var(--ce-texto-sobre-primario);
+}
+.page-link {
+  color: var(--bs-link-color);
+}
+
+/* ---- Foco visible: siempre, fuerte y con separación ---------------------- */
+:focus-visible,
+.btn:focus-visible,
+.form-control:focus-visible,
+.form-select:focus-visible,
+.form-check-input:focus-visible,
+.page-link:focus-visible,
+.nav-link:focus-visible {
+  outline: 3px solid var(--ce-foco) !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
+}
+.app-encabezado :focus-visible {
+  outline-color: #ffffff !important;
+}
+[tabindex="-1"]:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* ---- Objetivos táctiles -------------------------------------------------- */
+.btn,
+.form-control,
+.form-select,
+.page-link {
+  min-height: 2.75rem;
+}
+.btn-sm {
+  min-height: 2.5rem;
+}
+.form-check-input {
+  width: 1.4em;
+  height: 1.4em;
+}
+
+/* ---- Layout con CSS Grid ------------------------------------------------- */
+body {
+  background: var(--bs-body-bg);
+}
+.app {
+  display: grid;
+  min-height: 100vh;
+  grid-template-columns: 1fr;
+  grid-template-rows: auto 1fr auto;
+  grid-template-areas:
+    "encabezado"
+    "contenido"
+    "pie";
+}
+.app.con-menu {
+  grid-template-areas:
+    "encabezado"
+    "contenido"
+    "pie";
+}
+@media (min-width: 62em) {
+  .app.con-menu {
+    grid-template-columns: 17rem minmax(0, 1fr);
+    grid-template-areas:
+      "encabezado encabezado"
+      "menu contenido"
+      "menu pie";
+  }
+}
+
+.app-encabezado {
+  grid-area: encabezado;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.25rem;
+  padding: 0.75rem clamp(1rem, 3vw, 2rem);
+  background: var(--ce-cabecera);
+  color: #ffffff;
+}
+.marca {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.6rem;
+  color: #ffffff;
+  font-weight: 700;
+  text-decoration: none;
+  font-size: 1.1rem;
+}
+.marca:hover {
+  color: #dfe9cc;
+}
+.marca-sello {
+  display: inline-grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background: #93dc1d;
+  color: #14170f;
+  font-weight: 800;
+}
+.marca-sub {
+  display: block;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: #dfe9cc;
+}
+.encabezado-acciones {
+  margin-left: auto;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+.encabezado-acciones .usuario {
+  color: #ffffff;
+}
+
+.app-menu {
+  grid-area: menu;
+  background: var(--ce-menu-fondo);
+  border-right: 1px solid var(--bs-border-color);
+}
+@media (min-width: 62em) {
+  .app-menu {
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+}
+.menu-grupo {
+  padding: 0.75rem 0.75rem 0.25rem;
+}
+.menu-grupo h2 {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bs-secondary-color);
+  margin: 0.25rem 0.5rem 0.4rem;
+}
+.menu-grupo ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.menu-grupo a {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.5rem;
+  color: var(--bs-body-color);
+  text-decoration: none;
+}
+.menu-grupo a:hover {
+  background: var(--ce-menu-activo);
+}
+.menu-grupo a[aria-current="page"] {
+  background: var(--ce-menu-activo);
+  font-weight: 700;
+  box-shadow: inset 4px 0 0 var(--ce-primario);
+}
+
+.app-contenido {
+  grid-area: contenido;
+  min-width: 0;
+  padding: clamp(1rem, 3vw, 2rem);
+}
+.app-pie {
+  grid-area: pie;
+  padding: 1rem clamp(1rem, 3vw, 2rem);
+  border-top: 1px solid var(--bs-border-color);
+  color: var(--bs-secondary-color);
+}
+.saltar {
+  position: absolute;
+  top: 0.5rem;
+  left: 0.5rem;
+  z-index: 2000;
+}
+
+/* ---- Contenido ----------------------------------------------------------- */
+.encabezado-vista h1:focus {
+  outline: none;
+}
+.encabezado-vista h1:focus-visible {
+  outline: 3px solid var(--ce-foco);
+}
+
+/* Tarjetas del tablero: grilla que se adapta sola al ancho */
+.grilla-indicadores {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+}
+.indicador {
+  border: 1px solid var(--bs-border-color);
+  border-left: 6px solid var(--ce-primario);
+  border-radius: 0.75rem;
+  padding: 1rem 1.25rem;
+  background: var(--bs-tertiary-bg);
+}
+.indicador .valor {
+  font-size: 1.8rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+.indicador.alerta {
+  border-left-color: #b3261e;
+}
+
+/* Grilla de formularios: campos de lado a lado en pantallas anchas */
+.grilla-form {
+  display: grid;
+  gap: 0 1.25rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+}
+.grilla-form .ancho-completo {
+  grid-column: 1 / -1;
+}
+
+/* Barra de herramientas de una lista: búsqueda + filtros + acción */
+.barra-lista {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: end;
+  margin-bottom: 1rem;
+}
+@media (min-width: 48em) {
+  .barra-lista {
+    grid-template-columns: minmax(0, 2fr) repeat(auto-fit, minmax(10rem, 1fr));
+  }
+}
+
+/* Las etiquetas .visually-hidden (position: absolute) de una tabla deben
+   quedar dentro del recorte de su contenedor desplazable, o empujan la pagina */
+.table-responsive {
+  position: relative;
+}
+
+.tabla-admin th,
+.tabla-admin td {
+  vertical-align: middle;
+}
+.tabla-admin caption {
+  caption-side: top;
+}
+.table-responsive:focus-visible {
+  outline: 3px solid var(--ce-foco);
+}
+
+/* Los hijos de una grilla tienen min-width: auto (se estiran al ancho minimo
+   de su contenido): sin esto, una tabla ancha empujaria toda la pagina en vez
+   de hacer scroll dentro de su .table-responsive. */
+.pasos > *,
+.grilla-form > *,
+.grilla-indicadores > *,
+.barra-lista > * {
+  min-width: 0;
+}
+
+/* Paso a paso del alta de producto */
+.pasos {
+  counter-reset: paso;
+  display: grid;
+  gap: 1.5rem;
+}
+.paso {
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+}
+.paso > h2::before {
+  counter-increment: paso;
+  content: counter(paso) ". ";
+  color: var(--ce-primario);
+}
+.paso legend {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.lineas-tabla input,
+.lineas-tabla select {
+  min-width: 6rem;
+}
+
+.login {
+  max-width: 28rem;
+  margin: 3rem auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
+  }
+}
+
+/* Campos automaticos (codigos): se ven y se enfocan, pero no se editan */
+.form-control[readonly] {
+    background-color: var(--bs-secondary-bg);
+    cursor: default;
+}
+
+/* Menu de la cuenta en la cabecera: colores fijos (blanco/oscuro, 18:1) y sin
+   transicion de color: a mitad de la transicion el texto quedaba en 1.6:1 */
+.app-encabezado .btn-outline-light {
+    --bs-btn-hover-bg: #ffffff;
+    --bs-btn-hover-color: #14170f;
+    --bs-btn-active-bg: #ffffff;
+    --bs-btn-active-color: #14170f;
+    transition: none;
+}
+
+/* Resumen de errores: link-danger sobre el fondo de alert-danger da 3.39:1.
+   El tono "emphasis" de Bootstrap es el pensado para ese fondo (claro 7.3:1,
+   oscuro #ea868f sobre #2c0b0e 7.6:1). */
+.alert-danger .link-danger,
+[role="alert"] .link-danger {
+    color: var(--bs-danger-text-emphasis) !important;
+    text-decoration-color: currentColor !important;
+}
+
+/* Encabezados ordenables: se ven como el titulo de la columna, pero son botones */
+.btn-orden {
+    background: none;
+    border: 0;
+    padding: 0.25rem 0;
+    min-height: 2rem;
+    font: inherit;
+    font-weight: 600;
+    color: inherit;
+    text-align: inherit;
+    cursor: pointer;
+    text-decoration: underline dotted;
+    text-underline-offset: 0.25em;
+}
+.btn-orden:hover {
+    text-decoration-style: solid;
+}
+.flecha-orden {
+    white-space: nowrap;
+}
+th[aria-sort="ascending"] .btn-orden,
+th[aria-sort="descending"] .btn-orden {
+    text-decoration-style: solid;
+}
+
+/* ---- Menu por secciones plegables (acordeon) ---- */
+.menu-fijo {
+  list-style: none;
+  margin: 0;
+  padding: 0.75rem 0.75rem 0.25rem;
+}
+.menu-fijo a,
+.menu-grupo a {
+  display: flex;
+  align-items: center;
+  min-height: 2.75rem;
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.5rem;
+  color: var(--bs-body-color);
+  text-decoration: none;
+}
+.menu-fijo a:hover {
+  background: var(--ce-menu-activo);
+}
+.menu-fijo a[aria-current="page"] {
+  background: var(--ce-menu-activo);
+  font-weight: 700;
+  box-shadow: inset 4px 0 0 var(--ce-primario);
+}
+.menu-grupo {
+  padding: 0.15rem 0.75rem;
+}
+.menu-grupo h2 {
+  margin: 0;
+  font-size: 1rem;
+  letter-spacing: normal;
+  text-transform: none;
+  color: inherit;
+}
+.menu-seccion {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.4rem 0.75rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: none;
+  color: var(--bs-body-color);
+  font: inherit;
+  font-weight: 700;
+  text-align: start;
+}
+.menu-seccion:hover {
+  background: var(--ce-menu-activo);
+}
+.menu-cuenta {
+  margin-inline-start: auto;
+  min-width: 1.75rem;
+  padding: 0 0.4rem;
+  border-radius: 1rem;
+  background: var(--bs-secondary-bg);
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: center;
+}
+.menu-chevron::before {
+  content: "▸";
+  display: inline-block;
+  transition: transform 0.15s;
+}
+.menu-seccion[aria-expanded="true"] .menu-chevron::before {
+  transform: rotate(90deg);
+}
+.menu-grupo ul {
+  padding-inline-start: 0.75rem;
+  margin-bottom: 0.25rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .menu-chevron::before {
+    transition: none;
+  }
+}
+
+/* ---- Reportes y tableros ---- */
+.grilla-widgets {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 1rem;
+}
+.grilla-widgets > * {
+  min-width: 0;
+}
+.widget-completo {
+  grid-column: 1 / -1;
+}
+.grilla-reportes {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: 0.75rem;
+}
+.grilla-reportes > li {
+  min-width: 0;
+}
+.grilla-reportes .card:hover,
+.grilla-reportes .card:focus-within {
+  border-color: var(--ce-primario);
+}
+.filtro-periodo {
+  margin-bottom: 1.25rem;
+}
+/* la variacion se dice en texto; el color solo refuerza (WCAG 1.4.1) */
+.variacion.buena {
+  color: var(--bs-success-text-emphasis);
+}
+.variacion.mala {
+  color: var(--bs-danger-text-emphasis);
+}
+.totales-reporte {
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  background: var(--bs-secondary-bg);
+}
+.grafico-barras {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.4rem;
+}
+.grafico-barras li {
+  display: grid;
+  grid-template-columns: minmax(6rem, 32%) 1fr auto;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+}
+.grafico-etiqueta {
+  overflow-wrap: anywhere;
+}
+.grafico-pista {
+  height: 1.1rem;
+  border-radius: 0.3rem;
+  background: var(--bs-secondary-bg);
+  overflow: hidden;
+}
+.grafico-barra {
+  display: block;
+  height: 100%;
+  background: var(--ce-primario);
+  border-radius: 0.3rem;
+}
+.grafico-valor {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  text-align: end;
+  white-space: nowrap;
+}
+@media (max-width: 30rem) {
+  .grafico-barras li {
+    grid-template-columns: 1fr auto;
+  }
+  .grafico-pista {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
+
+/* Bootstrap pone .offcanvas-lg .offcanvas-body en display:flex (fila) desde 992 px:
+   las secciones del menu quedaban una al lado de otra y solo se veia la primera. */
+#contenidoMenu {
+  display: block;
+  overflow-y: auto;
+}
+
+/* ---- Contraste de los campos (WCAG 2.2 1.4.11: 3:1 para bordes de controles) ----
+   El borde de Bootstrap (#dee2e6) sobre blanco es 1.3:1: en modo claro los
+   campos casi no se distinguian. #737b84 sobre blanco = 4.5:1. */
+[data-bs-theme="light"] .form-control,
+[data-bs-theme="light"] .form-select,
+[data-bs-theme="light"] .form-check-input {
+  border-color: #737b84;
+}
+[data-bs-theme="dark"] .form-control,
+[data-bs-theme="dark"] .form-select,
+[data-bs-theme="dark"] .form-check-input {
+  border-color: #8b939b; /* sobre #212529: 5.1:1 */
+}
+/* Autocompletado del navegador: Chrome/Opera ponen fondo azul-gris y el texto
+   quedaba blanco sobre gris (ilegible). Se fuerza el texto y un fondo claro
+   que igual distingue el campo autocompletado. */
+[data-bs-theme="light"] input:-webkit-autofill,
+[data-bs-theme="light"] input:-webkit-autofill:hover,
+[data-bs-theme="light"] input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #14170f;
+  box-shadow: 0 0 0 1000px #eef3e4 inset;
+  caret-color: #14170f;
+}
+[data-bs-theme="dark"] input:-webkit-autofill,
+[data-bs-theme="dark"] input:-webkit-autofill:hover,
+[data-bs-theme="dark"] input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #f1f5ea;
+  box-shadow: 0 0 0 1000px #2c3a17 inset;
+  caret-color: #f1f5ea;
+}
+
+/* "Ordenar por" solo en pantallas chicas: en escritorio ordenan los encabezados */
+.orden-movil { display: none; }
+@media (max-width: 767.98px) {
+  .orden-movil { display: flex; flex-wrap: wrap; }
+}
+
+/* Fila elegida en una tabla maestro-detalle (variante abierta en inventario) */
+.tabla-admin tr.fila-elegida > * {
+  background-color: var(--bs-primary-bg-subtle);
+  box-shadow: inset 4px 0 0 var(--bs-primary);
+}
+.tabla-admin tr.fila-elegida > :not(:first-child) { box-shadow: none; }
+
+/* Movimientos del kardex: entrada/salida con signo y texto, no solo color */
+.mov-entrada { color: var(--bs-success-text-emphasis); }
+.mov-salida { color: var(--bs-danger-text-emphasis); }
+
+/* Accesos rapidos del inicio */
+.accesos-rapidos { display: flex; flex-wrap: wrap; gap: .5rem; margin-bottom: 1.5rem; }
+
+/* Fechas del kardex en una linea en escritorio (en celular se permite partir) */
+@media (min-width: 48em) { .fecha-celda { white-space: nowrap; } }

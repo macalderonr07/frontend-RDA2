@@ -1,0 +1,119 @@
+# Verifica la administración de Comercial Elite y, SOLO si todo pasa, la
+# publica en GitHub Pages.
+#
+#   verificar  -> sintaxis de todo el JS (MVC en módulos ES6), y en Chromium:
+#                 los módulos cargan sin errores, la pantalla de ingreso no tiene
+#                 violaciones WCAG 2.2 AA (axe) en claro, oscuro y celular,
+#                 teclado, foco visible y errores accesibles.
+#                 (La verificación completa de todas las pantallas necesita la
+#                 API y la base: corre en el CI del repositorio del backend
+#                 y en local con `npm run verificar`.)
+#   seguridad  -> npm audit y búsqueda de secretos (gitleaks).
+#   publicar   -> sube _site/ a Pages. Si algo falla, el sitio queda como estaba.
+#
+# La URL de la API sale de la variable del repositorio ADMIN_API_URL
+# (Settings > Secrets and variables > Actions > Variables). Sin ella, la
+# pantalla de ingreso avisa que falta configurar la API.
+
+name: Verificar y publicar
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  verificar:
+    name: Verificar la administración
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Instalar dependencias (Playwright y axe-core)
+        run: npm ci --no-fund
+
+      - name: Sintaxis de todos los módulos JS
+        run: |
+          find js scripts -name '*.js' -o -name '*.mjs' | sort | while read -r f; do node --check "$f" || exit 1; done
+          echo "Sintaxis correcta en $(find js scripts -name '*.js' -o -name '*.mjs' | wc -l) archivos"
+
+      - name: Bootstrap desde CDN con integridad (SRI)
+        run: |
+          n=$(grep -c 'cdn.jsdelivr.net/npm/bootstrap@5' index.html)
+          s=$(grep 'cdn.jsdelivr.net/npm/bootstrap@5' index.html | grep -c 'integrity="sha384-')
+          [ "$n" -gt 0 ] && [ "$n" = "$s" ] && echo "Bootstrap 5: $n recursos, todos con SRI" || { echo "Falta integrity en Bootstrap"; exit 1; }
+
+      - name: Instalar Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Pruebas en navegador sin API (accesibilidad, teclado, errores)
+        run: npm run verificar:sin-api
+
+      - name: Preparar la carpeta publicable
+        if: github.event_name != 'pull_request'
+        env:
+          ADMIN_API_URL: ${{ vars.ADMIN_API_URL }}
+        run: |
+          rm -rf _site && mkdir _site
+          cp -r index.html css js _site/
+          if [ -n "$ADMIN_API_URL" ]; then
+            [[ "$ADMIN_API_URL" =~ ^https://[^[:space:]\"\'\<\>]+$ ]] || { echo "ADMIN_API_URL debe ser una URL https"; exit 1; }
+            printf 'window.ADMIN_API_URL = %s;\n' "$(node -p 'JSON.stringify(process.env.ADMIN_API_URL)')" > _site/js/config.js
+            echo "API configurada: $ADMIN_API_URL"
+          else
+            echo "Sin ADMIN_API_URL: el ingreso avisará que falta configurar la API"
+          fi
+
+      - name: Subir el sitio verificado
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  seguridad:
+    name: Seguridad
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: npm audit (severidad alta o más)
+        run: npm audit --audit-level=high
+      - name: Búsqueda de secretos en todo el historial (gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publicar:
+    name: Publicar en GitHub Pages
+    needs: [verificar, seguridad]
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.despliegue.outputs.page_url }}
+    steps:
+      - name: Desplegar
+        id: despliegue
+        uses: actions/deploy-pages@v5
