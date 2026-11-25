@@ -580,6 +580,55 @@ try {
     ok(/rollos recibidos/.test(await p.textContent(".modal.show form")), "la recepción cuenta rollos, no metros");
     await p.click(".modal.show button:text('Cancelar')");
     await p.waitForSelector(".modal", { state: "detached" });
+
+    // ------------------------------------------------------------ Recepcion de bandas
+    seccion("Recepción de un paquete de bandas (cuántas y la medida de cada una)");
+    await visitar(p, "/compras/nueva");
+    await p.selectOption("select[name=idProveedor]", { index: 1 });
+    await p.fill("input[placeholder^='Nombre, código o categoría (vacío']", "cuero graso");
+    await p.click("form[aria-label='Buscar productos para la orden'] button[type=submit]");
+    await p.click("button[aria-label^='Elegir Cuero graso']");
+    await p.waitForSelector(".modal.show .costo-compra");
+    await p.fill(".modal.show .costo-compra", "1,10");
+    await p.fill(".modal.show tbody tr:nth-child(1) input[type=number]", "20");
+    await p.click(".modal.show button:text('Agregar a la orden')");
+    await p.waitForSelector(".modal", { state: "detached" });
+    await p.click("form.card button[type=submit]");
+    await p.waitForFunction(() => /OC-\d+/.test(document.getElementById("tituloVista")?.textContent ?? ""), null, { timeout: 20000 });
+    await p.click("button:text('Emitir al proveedor')");
+    await p.click(".modal.show .btn-danger, .modal.show .btn-primary");
+    await p.waitForSelector("button:text('Registrar recepción')", { timeout: 15000 });
+    await p.click("button:text('Registrar recepción')");
+    const cuenta = p.locator(".modal.show input[name^=b]").first();
+    await cuenta.waitFor();
+    ok((await p.locator(".modal.show input[name^=l]").count()) === 0 && !/código del lote/i.test(await p.textContent(".modal.show form")),
+        "la recepción no pide códigos de lote (los genera la base)");
+    const idLinea = (await cuenta.getAttribute("name")).slice(1);
+    const bandas = p.locator(`.modal.show input[name^=m${idLinea}_]`);
+    await cuenta.fill("3");
+    ok((await bandas.count()) === 3 && (await p.isVisible(`.modal.show label:text-is('Banda 3 (pie2)'), .modal.show label:has-text('Banda 3')`)),
+        "al escribir 3 bandas aparecen 3 campos de medida, cada uno con su etiqueta");
+    await bandas.nth(0).fill("6");
+    await bandas.nth(1).fill("7,5");
+    ok(/Suman 13,5/.test(await p.textContent(".modal.show fieldset")), "la suma de las bandas se actualiza al escribir (13,5 de 20)");
+    await p.mouse.move(0, 0);
+    const violRecepcion = await axe(p);
+    ok(violRecepcion.length === 0, "recepción con campos de bandas sin violaciones de axe (WCAG 2.2 AA)", violRecepcion.join(" | "));
+    await p.click(".modal.show button[type=submit]");
+    await p.waitForFunction(() => document.activeElement?.closest("[role=alert], .resumen-errores, [tabindex='-1']") !== null, null, { timeout: 5000 }).catch(() => {});
+    ok(await bandas.nth(2).evaluate((i) => i.getAttribute("aria-invalid") === "true"), "una banda sin medida no deja registrar: queda marcada como inválida");
+    await cuenta.fill("2");
+    ok((await bandas.count()) === 2 && (await bandas.nth(1).inputValue()) === "7,5", "bajar a 2 bandas conserva las medidas ya escritas");
+    await cuenta.fill("3");
+    await bandas.nth(2).fill("10");
+    await p.click(".modal.show button[type=submit]");
+    await p.waitForTimeout(500);
+    ok(/suman 23,5/i.test(await p.textContent(".modal.show")), "si las bandas suman más que lo pendiente (23,5 de 20) lo avisa y no registra");
+    await bandas.nth(2).fill("5,25");
+    await p.click(".modal.show button[type=submit]");
+    await p.waitForSelector(".modal", { state: "detached", timeout: 15000 })
+        .catch(async () => { throw new Error(`la recepción de bandas no se registró: ${(await p.textContent(".modal.show")).replace(/\s+/g, " ").slice(0, 700)}`); });
+    ok(/Recepción registrada/.test(await p.textContent("#contenido")), "recepción de 3 bandas registrada (6 + 7,5 + 5,25 pie²)");
     // Inventario: producto -> variantes -> kardex, con busqueda instantanea
     await visitar(p, "/inventario");
     await p.fill("#contenido input[name=q]", "PU texturizado");

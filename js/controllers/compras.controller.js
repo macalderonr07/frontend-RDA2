@@ -11,7 +11,7 @@ import { RecursoModelo } from "../models/recurso.model.js";
 import { InventarioModelo } from "../models/negocio.model.js";
 import { ordenServidor, paramsOrden, alerta, campo, cargando, confirmar, dialogo, encabezado, insignia, notaObligatorios, paginacion, resumenErrores, tabla, zonaAlertas, envolverOrdenable } from "../views/componentes.js";
 import { formulario } from "../views/formulario.js";
-import { aNumero, dialogoCompra } from "../views/compra.view.js";
+import { aNumero, bandasPorPaquete, dialogoCompra } from "../views/compra.view.js";
 
 const contenido = () => document.getElementById("contenido");
 const TONO = { BORRADOR: "secondary", EMITIDA: "primary", CERRADA: "success", ANULADA: "danger" };
@@ -307,18 +307,17 @@ export async function orden({ id }) {
         const modo = (l) => (l.compra_descripcion && l.compra_factor ? (l.por_pieza ? "piezasFijas" : "unidades") : l.por_pieza ? "medidas" : "base");
         const nombre = (l) => nombreCompra(l.compra_descripcion);
         const pendienteTexto = (l) => `Pendiente: ${formato.numero(l.cantidad_pendiente)} ${l.unidad}${l.compra_factor ? ` (${enUnidadCompra(l.cantidad_pendiente, { descripcion: l.compra_descripcion, factor: l.compra_factor, unidad: l.unidad })})` : ""}.`;
-        const campos = pendientes.flatMap((l) => {
+        // El codigo de cada lote lo genera la base (OC<orden>-<n>): no se escribe.
+        const campos = pendientes.map((l) => {
             const id = l.id_detalle_orden_compra;
             const m = modo(l);
-            const cantidad = m === "medidas"
-                ? { nombre: `m${id}`, etiqueta: `${l.var_sku}: medida de cada ${l.compra_descripcion ? "banda del paquete" : "pieza"} (${l.unidad})`, tipo: "texto", patron: "medidas", max: 600,
-                    ayuda: `Separadas por comas, ej. 23.5, 22, 25.25 (tres bandas). ${pendienteTexto(l)} Vacío = no llegó.` }
-                : m === "base"
-                  ? { nombre: `c${id}`, etiqueta: `${l.var_sku}: cantidad recibida (${l.unidad})`, tipo: "cantidad", ayuda: `${pendienteTexto(l)} Vacío o 0 = no llegó.` }
-                  : { nombre: `u${id}`, etiqueta: `${l.var_sku}: ${plural(nombre(l))} recibidos (de ${formato.numero(l.compra_factor)} ${l.unidad})`, tipo: "entero",
-                      ayuda: `${pendienteTexto(l)}${m === "piezasFijas" ? ` Cada ${plural(nombre(l), 1)} entra como su propio lote.` : ""} Vacío o 0 = no llegó.` };
-            return [cantidad,
-                { nombre: `l${id}`, etiqueta: `${l.var_sku}: código del lote`, tipo: "texto", patron: "codigo", max: 26, ayuda: m === "medidas" || m === "piezasFijas" ? "Opcional. A cada pieza se le agrega -1, -2…" : "El del proveedor (opcional)" }];
+            if (m === "medidas") {
+                return { nombre: `b${id}`, etiqueta: `${l.var_sku}: ${l.compra_descripcion ? "bandas que llegaron en el paquete" : "piezas que llegaron"}`, tipo: "entero",
+                    ayuda: `${pendienteTexto(l)} Escribe cuántas y después la medida de cada una. Vacío o 0 = no llegó.` };
+            }
+            if (m === "base") return { nombre: `c${id}`, etiqueta: `${l.var_sku}: cantidad recibida (${l.unidad})`, tipo: "cantidad", ayuda: `${pendienteTexto(l)} Vacío o 0 = no llegó.` };
+            return { nombre: `u${id}`, etiqueta: `${l.var_sku}: ${plural(nombre(l))} recibidos (de ${formato.numero(l.compra_factor)} ${l.unidad})`, tipo: "entero",
+                ayuda: `${pendienteTexto(l)}${m === "piezasFijas" ? ` Cada ${plural(nombre(l), 1)} entra como su propio lote.` : ""} Vacío o 0 = no llegó.` };
         });
         const valores = Object.fromEntries(pendientes.flatMap((l) => {
             const m = modo(l);
@@ -327,7 +326,8 @@ export async function orden({ id }) {
             return [];
         }));
         let d;
-        const { form } = formulario({
+        const bandas = new Map(); // id de linea -> medidas() de sus bandas
+        const { form, reglas } = formulario({
             campos,
             valores,
             textoEnviar: "Registrar recepción",
@@ -336,15 +336,14 @@ export async function orden({ id }) {
                 const lineas = pendientes
                     .flatMap((l) => {
                         const id = l.id_detalle_orden_compra;
-                        const codigo = datos[`l${id}`];
                         const m = modo(l);
-                        if (m === "base") return [{ idDetalleOrdenCompra: id, cantidad: Number(datos[`c${id}`] ?? 0), codigoLote: codigo }];
-                        if (m === "unidades") return [{ idDetalleOrdenCompra: id, cantidad: Math.round(Number(datos[`u${id}`] ?? 0) * l.compra_factor * 1000) / 1000, codigoLote: codigo }];
+                        if (m === "base") return [{ idDetalleOrdenCompra: id, cantidad: Number(datos[`c${id}`] ?? 0) }];
+                        if (m === "unidades") return [{ idDetalleOrdenCompra: id, cantidad: Math.round(Number(datos[`u${id}`] ?? 0) * l.compra_factor * 1000) / 1000 }];
                         // piezas: una linea (un lote) por plancha o por banda
                         const medidas = m === "piezasFijas"
                             ? Array.from({ length: Number(datos[`u${id}`] ?? 0) }, () => l.compra_factor)
-                            : String(datos[`m${id}`] ?? "").split(",").map((x) => Number(x.trim())).filter((x) => x > 0);
-                        return medidas.map((cantidad, i) => ({ idDetalleOrdenCompra: id, cantidad, codigoLote: codigo ? `${codigo}-${i + 1}` : undefined }));
+                            : bandas.get(id).medidas();
+                        return medidas.map((cantidad) => ({ idDetalleOrdenCompra: id, cantidad }));
                     })
                     .filter((l) => l.cantidad > 0);
                 if (lineas.length === 0) {
@@ -352,12 +351,24 @@ export async function orden({ id }) {
                     e.detalles = [];
                     throw e;
                 }
+                // las bandas de un paquete no pueden sumar mas de lo pendiente
+                for (const l of pendientes.filter((x) => modo(x) === "medidas")) {
+                    const total = bandas.get(l.id_detalle_orden_compra).medidas().reduce((s, x) => s + x, 0);
+                    if (total > l.cantidad_pendiente + 1e-9) {
+                        const e = new Error(`${l.var_sku}: las bandas suman ${formato.numero(total)} ${l.unidad} y solo quedan ${formato.numero(l.cantidad_pendiente)} pendientes.`);
+                        e.detalles = [{ campo: `b${l.id_detalle_orden_compra}`, mensaje: "Las bandas suman más de lo pendiente." }];
+                        throw e;
+                    }
+                }
                 await CompraModelo.recepcionar(oc.idOrdenCompra, { lineas });
                 d.cerrar();
                 await pintar("Recepción registrada: los lotes entraron al inventario con su costo.");
             },
         });
-        d = dialogo({ titulo: `Recepción de la OC-${oc.idOrdenCompra}`, contenido: [el("p", { class: "text-body-secondary" }, "Cuenta lo que llegó en la unidad del proveedor: rollos, planchas, conos… En los paquetes de bandas se escribe la medida de cada banda; cada banda y cada plancha entra como su propio lote."), form], grande: true });
+        for (const l of pendientes.filter((x) => modo(x) === "medidas")) {
+            bandas.set(l.id_detalle_orden_compra, bandasPorPaquete({ form, reglas, id: l.id_detalle_orden_compra, unidad: l.unidad, pendiente: l.cantidad_pendiente }));
+        }
+        d = dialogo({ titulo: `Recepción de la OC-${oc.idOrdenCompra}`, contenido: [el("p", { class: "text-body-secondary" }, "Cuenta lo que llegó en la unidad del proveedor: rollos, planchas, conos… En un paquete de bandas indica cuántas llegaron y la medida de cada una. Cada banda y cada plancha entra como su propio lote, con un código que se genera solo (por ejemplo, OC21-1)."), form], grande: true });
         d.abrir();
     }
     await pintar(sessionStorage.getItem("ce_admin_mensaje"));

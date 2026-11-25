@@ -153,3 +153,66 @@ export function dialogoCompra({ p, alAgregar }) {
     d = dialogo({ titulo: `Pedir ${p.nombre}`, contenido: form, grande: true });
     return d;
 }
+
+/**
+ * Recepcion de un paquete de bandas (cuero): debajo del campo "bandas que
+ * llegaron" (nombre `b<id>`) aparece un campo de medida por cada banda. Los
+ * campos nuevos se registran en las reglas del formulario, asi entran en la
+ * misma validacion y en el resumen de errores enfocable. Una linea en vivo
+ * informa cuanto suman frente a lo pendiente.
+ * Devuelve medidas(): las medidas escritas, en orden.
+ */
+export function bandasPorPaquete({ form, reglas, id, unidad, pendiente, maximo = 60 }) {
+    const control = form.elements.namedItem(`b${id}`);
+    const lista = el("div", { class: "grilla-form" });
+    const suma = el("p", { class: "small mb-2", "aria-live": "polite" });
+    const grupo = el("fieldset", { class: "ancho-completo border rounded-3 px-3 pt-2 mb-3", hidden: true },
+        el("legend", { class: "fs-6 fw-semibold float-none w-auto px-1 mb-1" }, `Medida de cada banda (${unidad})`),
+        suma, lista);
+    control.closest(".mb-3").after(grupo);
+
+    const valores = []; // lo escrito se conserva aunque se baje el numero de bandas
+    const nombre = (k) => `m${id}_${k}`;
+    const leer = () => [...lista.querySelectorAll("input")].map((i) => Number(String(i.value).replace(",", ".")));
+
+    function actualizarSuma() {
+        const medidas = leer().filter((x) => x > 0);
+        const total = medidas.reduce((s, x) => s + x, 0);
+        const exceso = total > pendiente + 1e-9;
+        suma.className = `small mb-2 ${exceso ? "text-danger fw-semibold" : "text-body-secondary"}`;
+        suma.textContent = `Suman ${formato.numero(total)} ${unidad} de ${formato.numero(pendiente)} pendientes${exceso ? ": se pasa de lo pendiente." : "."}`;
+    }
+
+    function pintar() {
+        lista.querySelectorAll("input").forEach((i, k) => { valores[k] = i.value; });
+        for (const k of reglas.keys()) if (k.startsWith(`m${id}_`)) reglas.delete(k);
+        const n = Math.min(Math.max(Number.parseInt(control.value, 10) || 0, 0), maximo);
+        montar(lista, ...Array.from({ length: n }, (_, i) => {
+            const k = i + 1;
+            // coma o punto decimal (en Ecuador se escribe 23,5), hasta 3 decimales
+            const regla = {
+                etiqueta: `Banda ${k}`,
+                requerido: true,
+                validar: (v) => {
+                    const texto = String(v).trim();
+                    if (!/^\d{1,6}([.,]\d{1,3})?$/.test(texto)) return `Banda ${k}: escribe la medida en ${unidad}, con hasta 3 decimales (ej. 23,5).`;
+                    return Number(texto.replace(",", ".")) > 0 ? null : `Banda ${k}: la medida debe ser mayor que 0.`;
+                },
+            };
+            reglas.set(nombre(k), regla);
+            const nodo = campo({ nombre: nombre(k), etiqueta: `Banda ${k} (${unidad})`, tipo: "texto", requerido: true, valor: valores[i] ?? "" });
+            nodo.querySelector("input")?.setAttribute("inputmode", "decimal");
+            nodo.querySelector("input")?.addEventListener("input", actualizarSuma);
+            return nodo;
+        }));
+        grupo.hidden = n === 0;
+        actualizarSuma();
+    }
+    control.addEventListener("input", pintar);
+    control.setAttribute("max", String(maximo));
+    pintar();
+    return {
+        medidas: () => leer().filter((x) => x > 0),
+        primerCampo: () => control,
+    };
+}
