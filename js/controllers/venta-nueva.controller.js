@@ -14,7 +14,7 @@ import { aplicarErroresApi, marcarCampo, mostrarResumen, validarValor } from "..
 import { VentaModelo } from "../models/negocio.model.js";
 import { RecursoModelo } from "../models/recurso.model.js";
 import { alerta, campo, cargando, dialogo, encabezado, notaObligatorios, resumenErrores, envolverOrdenable } from "../views/componentes.js";
-import { dialogoProducto, formularioCliente, formularioDireccion } from "../views/venta.view.js";
+import { dialogoProducto, formularioCliente, formularioDireccion, usarSectores } from "../views/venta.view.js";
 
 const contenido = () => document.getElementById("contenido");
 
@@ -29,6 +29,7 @@ export async function nueva() {
     }
     montar(contenido(), cargando());
     const ciudades = await RecursoModelo.opciones("ciudades");
+    usarSectores(VentaModelo.sectores);
 
     let cliente = null; // ficha de /ventas/clientes
     let entrega = "local"; // local | domicilio

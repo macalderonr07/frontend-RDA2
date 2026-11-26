@@ -9,6 +9,19 @@ import { marcarCampo, mostrarResumen, validarValor } from "../core/validacion.js
 import { alEscribir, campo, encabezado, insignia, notaObligatorios, paginacion, pestanas, resumenErrores, tabla, envolverOrdenable } from "./componentes.js";
 
 // ------------------------------------------------------------------ Lista
+/** Como se puede pedir una forma de venta (su incremento). */
+export const INCREMENTOS = [
+    { valor: 1, etiqueta: "Solo enteros (1, 2, 3…)" },
+    { valor: 0.5, etiqueta: "Medios (0,5)" },
+    { valor: 0.25, etiqueta: "Cuartos (0,25)" },
+    { valor: 0.1, etiqueta: "Décimas (0,1)" },
+    { valor: 0.01, etiqueta: "Cualquier decimal" },
+];
+export function opcionesIncremento(actual) {
+    const v = Number(actual ?? 1);
+    return INCREMENTOS.some((o) => o.valor === v) ? INCREMENTOS : [...INCREMENTOS, { valor: v, etiqueta: `De a ${String(v).replace(".", ",")}` }];
+}
+
 export function vistaLista({ estado, puedeCrear, acciones, alertas }) {
     const idQ = nuevoId("q");
     const idPub = nuevoId("publicado");
@@ -86,6 +99,16 @@ export function vistaAlta({ opciones, acciones, alertas }) {
             campo({ nombre: "idUnidadMedida", etiqueta: "Unidad de medida del inventario", tipo: "seleccion", requerido: true, opciones: opciones.unidades, ayuda: "En qué se cuenta el stock: pie², metro, par, unidad…" }),
             campo({ nombre: "idTarifaIva", etiqueta: "Tarifa de IVA", tipo: "seleccion", requerido: true, opciones: opciones.tarifas, valor: opciones.tarifas.find((t) => /15/.test(t.etiqueta))?.valor }),
             campo({ nombre: "idMarca", etiqueta: "Marca", tipo: "seleccion", opciones: opciones.marcas, ayuda: "Opcional" }),
+            // un producto se relaciona con al menos un proveedor (puede tener varios)
+            el("fieldset", { class: "ancho-completo mb-3", id: "grupoProveedores", "aria-describedby": "proveedoresAyuda", tabindex: "-1" },
+                el("legend", { class: "form-label fs-6 mb-1" }, "Proveedores ", el("span", { class: "text-danger", "aria-hidden": "true" }, "*")),
+                el("div", { id: "proveedoresAyuda", class: "form-text mb-1" }, "Quién vende este producto. Marca al menos uno; en la orden de compra aparecerá primero con ellos."),
+                el("div", { class: "d-flex flex-wrap gap-3" }, (opciones.proveedores ?? []).map((pv) => {
+                    const idc = nuevoId("prov");
+                    return el("div", { class: "form-check" },
+                        el("input", { class: "form-check-input", type: "checkbox", name: "idsProveedores", value: String(pv.valor), id: idc }),
+                        el("label", { class: "form-check-label", for: idc }, pv.etiqueta));
+                }))),
             campo({ nombre: "uso", etiqueta: "Uso típico", max: 200, ayuda: "Ej. Calzado formal y marroquinería" }),
             campo({ nombre: "imagenUrl", etiqueta: "Imagen (URL)", tipo: "url", max: 500, ayuda: "Dirección https de la foto" }),
             el("div", { class: "ancho-completo" }, campo({ nombre: "descripcion", etiqueta: "Descripción", tipo: "textoLargo", max: 300 })),
@@ -192,6 +215,15 @@ export function vistaAlta({ opciones, acciones, alertas }) {
         const celda = (nombre, etiqueta, valor, ayuda) => {
             const id = nuevoId(nombre);
             const idError = `${id}-error`;
+            if (nombre === "incremento") {
+                // Como se puede pedir: la tienda y las ventas usan este paso
+                const opciones = opcionesIncremento(valor);
+                return el("td", {},
+                    el("label", { class: "visually-hidden", for: id }, `${etiqueta} de la forma de venta ${n}`),
+                    el("select", { id, name: "forma_incremento", class: "form-select", "aria-describedby": idError, dataset: { error: idError } },
+                        opciones.map((o) => el("option", { value: String(o.valor), selected: Number(o.valor) === Number(valor ?? 1) }, o.etiqueta))),
+                    el("div", { id: idError, class: "invalid-feedback", "aria-live": "polite" }));
+            }
             return el("td", {},
                 el("label", { class: "visually-hidden", for: id }, `${etiqueta} de la forma de venta ${n}`),
                 // prefijo "forma_": el paso 1 ya tiene un campo "descripcion" en el mismo form
@@ -202,7 +234,7 @@ export function vistaAlta({ opciones, acciones, alertas }) {
             celda("descripcion", "Nombre", valores.descripcion),
             celda("factor", "Contenido en unidad base", valores.factor),
             celda("cantidadMinima", "Compra mínima", valores.cantidadMinima ?? 1),
-            celda("incremento", "Se vende de a", valores.incremento ?? 1),
+            celda("incremento", "Cómo se pide", valores.incremento ?? 1),
             celda("precio", "Precio con IVA", valores.precio),
             el("td", {}, el("button", {
                 type: "button", class: "btn btn-sm btn-outline-danger", "aria-label": `Quitar la forma de venta ${n}`,
@@ -219,11 +251,11 @@ export function vistaAlta({ opciones, acciones, alertas }) {
     agregarFila({ descripcion: "Unidad", factor: 1 });
     const paso3 = el("section", { class: "paso", "aria-labelledby": "paso3" },
         el("h2", { class: "h5", id: "paso3" }, "Formas de venta y precios"),
-        el("p", { class: "text-body-secondary" }, "Cómo se vende cada variante. El contenido va en la unidad del inventario: una docena = 12 unidades; un rollo de 25 m = 25; el pie² de cuero = 1 (con incremento 0.25). El precio es CON IVA: lo que paga el cliente."),
+        el("p", { class: "text-body-secondary" }, "Cómo se vende cada variante. El contenido va en la unidad del inventario: una docena = 12 unidades; un rollo de 25 m = 25; el pie² de cuero = 1 (y se pide con «Cualquier decimal»). El precio es CON IVA: lo que paga el cliente."),
         envolverOrdenable(
             el("table", { class: "table align-middle lineas-tabla" },
                 el("caption", { class: "visually-hidden" }, "Formas de venta del producto"),
-                el("thead", {}, el("tr", {}, ["Nombre", "Contenido (unidad base)", "Compra mínima", "Se vende de a", "Precio con IVA (USD)", "Acción"].map((t) => el("th", { scope: "col" }, t)))),
+                el("thead", {}, el("tr", {}, ["Nombre", "Contenido (unidad base)", "Compra mínima", "Cómo se pide", "Precio con IVA (USD)", "Acción"].map((t) => el("th", { scope: "col" }, t)))),
                 filas),
             { "aria-label": "Formas de venta (desplazable)" }),
         el("button", { type: "button", class: "btn btn-outline-primary", onclick: () => agregarFila().querySelector("input").focus() }, "Agregar forma de venta"));
@@ -257,7 +289,7 @@ export function vistaAlta({ opciones, acciones, alertas }) {
                 descripcion: { etiqueta: `Forma ${i + 1}: nombre`, requerido: true, patron: "nombre", max: 40 },
                 factor: { etiqueta: `Forma ${i + 1}: contenido`, requerido: true, patron: "cantidad" },
                 cantidadMinima: { etiqueta: `Forma ${i + 1}: compra mínima`, requerido: true, patron: "cantidad" },
-                incremento: { etiqueta: `Forma ${i + 1}: se vende de a`, requerido: true, patron: "cantidad" },
+                incremento: { etiqueta: `Forma ${i + 1}: cómo se pide`, requerido: true, patron: "cantidad" },
                 precio: { etiqueta: `Forma ${i + 1}: precio con IVA`, requerido: true, patron: "dinero" },
             };
             const datos = {};
@@ -277,6 +309,8 @@ export function vistaAlta({ opciones, acciones, alertas }) {
         if (new Set(nombres).size !== nombres.length) errores.push({ control: null, mensaje: "Hay dos formas de venta con el mismo nombre." });
         const grupos = [...elegidos.values()];
         if (grupos.some((g) => g.valores.size === 0)) errores.push({ control: null, mensaje: "Marca al menos un valor en cada atributo elegido (o desmarca el atributo)." });
+        const idsProveedores = [...form.querySelectorAll("input[name=idsProveedores]:checked")].map((c) => Number(c.value));
+        if (idsProveedores.length === 0) errores.push({ control: form.querySelector("#grupoProveedores"), mensaje: "Proveedores: marca al menos uno." });
         if (errores.length) return mostrarResumen(resumen, errores);
         mostrarResumen(resumen, []);
 
@@ -297,6 +331,7 @@ export function vistaAlta({ opciones, acciones, alertas }) {
             ...(v("compraDescripcion") ? { compraDescripcion: v("compraDescripcion"), ...(v("compraFactor") ? { compraFactor: Number(v("compraFactor")) } : {}) } : {}),
             precioPorVariante: form.elements.namedItem("precioPorVariante").checked,
             publicado: form.elements.namedItem("publicado").checked,
+            idsProveedores,
             variantes,
             presentaciones: formas,
         };
@@ -336,6 +371,20 @@ export function vistaFicha({ producto, puede, acciones, alertas, formularioGener
     const formas = formasDeVenta(producto);
     const unidad = (producto.unidad ?? "").toLowerCase();
     const { panelFormas, panelVariantes, panelDescuentos, panelGeneral } = panelesFicha({ producto, formas, unidad, puede, acciones, formularioGeneral });
+    const proveedores = producto.proveedores ?? [];
+    const panelProveedores = el("section", { class: "mb-4", "aria-labelledby": "tituloProveedores" },
+        el("h2", { class: "h5", id: "tituloProveedores" }, "Proveedores"),
+        el("p", { class: "text-body-secondary" }, "Quién vende este producto. Debe tener al menos uno; en la orden de compra aparece primero con ellos."),
+        tabla({
+            titulo: "Proveedores del producto",
+            filas: proveedores,
+            columnas: [
+                { titulo: "Proveedor", valor: (pv) => [pv.nombre, pv.activo ? null : [" ", insignia("Inactivo", "secondary")]] },
+                { titulo: "Código del proveedor", valor: (pv) => pv.codigoProveedor ?? "—" },
+                ...(puede.catalogo ? [{ titulo: "Acción", valor: (pv) => el("button", { type: "button", class: "btn btn-sm btn-outline-danger", "aria-label": `Quitar a ${pv.nombre}`, onclick: () => acciones.quitarProveedor(pv) }, "Quitar") }] : []),
+            ],
+        }),
+        puede.catalogo ? el("button", { type: "button", class: "btn btn-sm btn-outline-primary", onclick: acciones.agregarProveedor }, "Agregar proveedor") : null);
     return el("section", { "aria-labelledby": "tituloVista" },
         encabezado({
             titulo: `${producto.codigo} · ${producto.nombre}`,
@@ -356,6 +405,7 @@ export function vistaFicha({ producto, puede, acciones, alertas, formularioGener
         pestanas([
             { id: "variantes", titulo: `Variantes (${producto.variantes.length})`, contenido: () => panelVariantes },
             { id: "formas", titulo: `Formas de venta y precios (${formas.length})`, contenido: () => panelFormas },
+            { id: "proveedores", titulo: `Proveedores (${proveedores.length})`, contenido: () => panelProveedores },
             { id: "descuentos", titulo: "Descuentos y ofertas", contenido: () => panelDescuentos },
             { id: "general", titulo: "Datos generales", contenido: () => panelGeneral },
         ], { activa: pestana, alCambiar: alCambiarPestana, etiqueta: `Secciones de ${producto.codigo}` }));
@@ -376,7 +426,7 @@ function panelesFicha({ producto, formas, unidad, puede, acciones, formularioGen
                     { titulo: "Forma de venta", valor: (f) => f.descripcion, clave: "descripcion" },
                     { titulo: `Contenido (${unidad})`, numerica: true, valor: (f) => formato.numero(f.factor), clave: "factor" },
                     { titulo: "Compra mínima", numerica: true, valor: (f) => formato.numero(f.cantidadMinima), clave: "cantidadMinima" },
-                    { titulo: "Se vende de a", numerica: true, valor: (f) => formato.numero(f.incremento), clave: "incremento" },
+                    { titulo: "Cómo se pide", valor: (f) => opcionesIncremento(f.incremento).find((o) => o.valor === Number(f.incremento))?.etiqueta, clave: "incremento" },
                     { titulo: "Precio con IVA", numerica: true, valor: (f) => (f.preciosConIva.size > 1 ? `${[...f.preciosConIva].map(formato.dinero).join(" / ")} (varía por variante)` : formato.dinero([...f.preciosConIva][0])) },
                     { titulo: "Estado", valor: (f) => (f.activa ? insignia("Activa", "success") : insignia("Inactiva", "secondary")) },
                 ],
@@ -398,7 +448,7 @@ function panelesFicha({ producto, formas, unidad, puede, acciones, formularioGen
                     { titulo: "SKU", valor: (v) => v.sku, clave: "sku" },
                     { titulo: "Características", valor: (v) => Object.entries(v.caracteristicas).map(([k, x]) => `${k}: ${x}`).join(" · ") || "—" },
                     { titulo: `Disponible (${unidad})`, numerica: true, valor: (v) => formato.numero(v.stock.disponible) },
-                    { titulo: "Stock mínimo", numerica: true, valor: (v) => formato.numero(v.stockMinimo), clave: "stockMinimo" },
+                    { titulo: "Existencia mínima", numerica: true, valor: (v) => formato.numero(v.stockMinimo), clave: "stockMinimo" },
                     { titulo: "Estado", valor: (v) => [v.activa ? insignia("Activa", "success") : insignia("Inactiva", "secondary"), v.stock.requiere_compra ? [" ", insignia("Reponer", "warning")] : null] },
                 ],
                 acciones: (v) => [

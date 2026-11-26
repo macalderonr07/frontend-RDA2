@@ -142,13 +142,15 @@ export async function nueva() {
             e.preventDefault();
             const q = new FormData(e.currentTarget).get("q").trim();
             try {
-                const encontrados = await CompraModelo.productos(q);
+                const idProv = Number(tarjetaProveedor.querySelector("[name=idProveedor]")?.value) || null;
+                const encontrados = await CompraModelo.productos(q, idProv);
                 montar(resultados, encontrados.length
                     ? el("ul", { class: "list-group", "aria-label": `Productos encontrados: ${encontrados.length}` }, encontrados.map((x) =>
                           el("li", { class: "list-group-item d-flex flex-wrap justify-content-between align-items-center gap-2" },
                               el("span", { class: "d-flex align-items-center gap-3" },
                                   x.imagen_url ? el("img", { src: x.imagen_url, alt: "", width: 48, height: 48, class: "rounded object-fit-cover", loading: "lazy" }) : null,
                                   el("span", {}, el("span", { class: "fw-semibold" }, x.prd_nombre),
+                                      idProv ? (x.del_proveedor ? [" ", insignia("De este proveedor", "success")] : el("span", { class: "d-block small text-warning-emphasis" }, "No registrado con este proveedor")) : null,
                                       el("span", { class: "d-block small text-body-secondary" },
                                           [x.prd_codigo, x.categoria, `en ${x.unidad}`, x.variantes > 1 ? `${x.variantes} variantes` : null,
                                               x.a_reponer ? `${x.a_reponer} bajo el mínimo` : null].filter(Boolean).join(" · ")))),
@@ -312,11 +314,11 @@ export async function orden({ id }) {
             const id = l.id_detalle_orden_compra;
             const m = modo(l);
             if (m === "medidas") {
-                return { nombre: `b${id}`, etiqueta: `${l.var_sku}: ${l.compra_descripcion ? "bandas que llegaron en el paquete" : "piezas que llegaron"}`, tipo: "entero",
+                return { nombre: `b${id}`, etiqueta: `${l.var_sku}: ${l.compra_descripcion ? "bandas que llegaron en el paquete" : "piezas que llegaron"}`, tipo: "entero", paso: 1,
                     ayuda: `${pendienteTexto(l)} Escribe cuántas y después la medida de cada una. Vacío o 0 = no llegó.` };
             }
-            if (m === "base") return { nombre: `c${id}`, etiqueta: `${l.var_sku}: cantidad recibida (${l.unidad})`, tipo: "cantidad", ayuda: `${pendienteTexto(l)} Vacío o 0 = no llegó.` };
-            return { nombre: `u${id}`, etiqueta: `${l.var_sku}: ${plural(nombre(l))} recibidos (de ${formato.numero(l.compra_factor)} ${l.unidad})`, tipo: "entero",
+            if (m === "base") return { nombre: `c${id}`, etiqueta: `${l.var_sku}: cantidad recibida (${l.unidad})`, tipo: "cantidad", paso: l.paso ?? 1, ayuda: `${pendienteTexto(l)} Vacío o 0 = no llegó.` };
+            return { nombre: `u${id}`, etiqueta: `${l.var_sku}: ${plural(nombre(l))} recibidos (de ${formato.numero(l.compra_factor)} ${l.unidad})`, tipo: "entero", paso: 1,
                 ayuda: `${pendienteTexto(l)}${m === "piezasFijas" ? ` Cada ${plural(nombre(l), 1)} entra como su propio lote.` : ""} Vacío o 0 = no llegó.` };
         });
         const valores = Object.fromEntries(pendientes.flatMap((l) => {

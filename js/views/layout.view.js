@@ -62,11 +62,22 @@ export function vistaUsuario(usuario, { alSalir }) {
         el("ul", { class: "dropdown-menu dropdown-menu-end", "aria-labelledby": "menuCuenta" },
             el("li", {}, el("span", { class: "dropdown-item-text small text-body-secondary" }, usuario.roles.map((r) => r.nombre).join(", "))),
             el("li", {}, el("a", { class: "dropdown-item", href: "#/mi-cuenta" }, "Mi cuenta y seguridad")),
+            el("li", {}, el("a", { class: "dropdown-item", href: urlTienda() }, "Ver la tienda en línea")),
             el("li", {}, el("hr", { class: "dropdown-divider" })),
             el("li", {}, el("button", { type: "button", class: "dropdown-item", onclick: alSalir }, "Cerrar sesión"))));
 }
 
 /** Pantalla de ingreso. alIngresar(correo, clave) lanza ErrorApi si falla. */
+/**
+ * Direccion de la tienda (e-commerce). window.TIENDA_URL (js/config.js) manda;
+ * en localhost, la tienda de desarrollo (puerto 8080); publicado, la de Pages.
+ */
+export function urlTienda() {
+    if (window.TIENDA_URL) return String(window.TIENDA_URL);
+    const local = ["localhost", "127.0.0.1"].includes(window.location.hostname);
+    return local ? `${window.location.protocol}//${window.location.hostname}:8080/` : "https://macalderonr07.github.io/frontend-e-commerce-RDA2/";
+}
+
 export function vistaLogin({ motivo, patronCorreo, alIngresar }) {
     const idCorreo = nuevoId("correo");
     const idClave = nuevoId("clave");
@@ -141,5 +152,7 @@ export function vistaLogin({ motivo, patronCorreo, alIngresar }) {
             el("h1", { class: "h3 mb-1", id: "tituloVista", tabindex: "-1" }, "Ingresar a la administración"),
             el("p", { class: "text-body-secondary" }, "Usa el correo y la clave que te asignó el administrador."),
             motivo ? alerta("warning", motivo) : null,
-            form));
+            form,
+            el("hr", { class: "my-4" }),
+            el("a", { class: "btn btn-outline-secondary w-100", href: urlTienda(), id: "irTienda" }, "Ir a la tienda en línea")));
 }

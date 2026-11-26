@@ -8,6 +8,8 @@ const datos = (r) => r.data;
 export const ProductoModelo = {
     listar: (filtros) => api.get("/catalogo/productos", filtros),
     obtener: (id) => api.get(`/catalogo/productos/${id}`).then(datos),
+    agregarProveedor: (id, d) => api.post(`/catalogo/productos/${id}/proveedores`, d).then(datos),
+    quitarProveedor: (id, idProveedor) => api.delete(`/catalogo/productos/${id}/proveedores/${idProveedor}`).then(datos),
     // { propios: [...], otros: [...] } con sus valores (ver el asistente de alta)
     atributosDeCategoria: (idCategoria) => api.get(`/catalogo/categorias/${idCategoria}/atributos`).then(datos),
     crear: (producto) => api.post("/catalogo/productos", producto).then(datos),
@@ -36,7 +38,8 @@ export const InventarioModelo = {
 };
 
 export const CompraModelo = {
-    productos: (q) => api.get("/compras/productos", { q }).then(datos),
+    // con idProveedor, primero sus productos (del_proveedor = 1)
+    productos: (q, idProveedor) => api.get("/compras/productos", { q, ...(idProveedor ? { idProveedor } : {}) }).then(datos),
     producto: (id) => api.get(`/compras/productos/${id}`).then(datos),
     ordenes: (filtros) => api.get("/compras/ordenes", filtros),
     orden: (id) => api.get(`/compras/ordenes/${id}`).then(datos),
@@ -48,6 +51,17 @@ export const CompraModelo = {
     porFacturar: () => api.get("/compras/por-facturar").then(datos),
 };
 
+/** Cotizaciones de la tienda (ventas por confirmar). */
+export const CotizacionModelo = {
+    listar: (filtros) => api.get("/ventas/cotizaciones", filtros),
+    obtener: (id) => api.get(`/ventas/cotizaciones/${id}`).then(datos),
+    cambiarCantidad: (id, idLinea, cantidad) => api.patch(`/ventas/cotizaciones/${id}/lineas/${idLinea}`, { cantidad }).then(datos),
+    quitarLinea: (id, idLinea) => api.delete(`/ventas/cotizaciones/${id}/lineas/${idLinea}`).then(datos),
+    agregarLinea: (id, linea) => api.post(`/ventas/cotizaciones/${id}/lineas`, linea).then(datos),
+    confirmar: (id) => api.post(`/ventas/cotizaciones/${id}/confirmar`, {}).then(datos),
+    descartar: (id) => api.delete(`/ventas/cotizaciones/${id}`),
+};
+
 export const VentaModelo = {
     pedidos: (filtros) => api.get("/ventas/pedidos", filtros),
     pedido: (id) => api.get(`/ventas/pedidos/${id}`).then(datos),
@@ -57,6 +71,7 @@ export const VentaModelo = {
     cambiarEstado: (id, estado, observacion) => api.post(`/ventas/pedidos/${id}/estado`, { estado, observacion }).then(datos),
     presentaciones: (q) => api.get("/ventas/presentaciones", { q }).then(datos),
     productos: (q) => api.get("/ventas/productos", { q }).then(datos),
+    sectores: (idCiudad) => api.get("/ventas/sectores", { idCiudad }).then(datos),
     clientes: (q) => api.get("/ventas/clientes", { q }).then(datos),
     cliente: (id) => api.get(`/ventas/clientes/${id}`).then(datos),
     crearCliente: (d) => api.post("/ventas/clientes", d).then(datos),

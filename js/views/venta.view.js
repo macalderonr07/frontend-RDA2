@@ -27,10 +27,48 @@ function errorIdentificacion(tipo, v) {
     return "Elige el tipo de identificación.";
 }
 
+// Sectores sugeridos por ciudad: el controlador inyecta la funcion que los
+// trae de la API (la vista no habla con los modelos).
+let cargarSectores = async () => [];
+export function usarSectores(fn) {
+    cargarSectores = fn;
+}
+
+/** Sector: se escribe (con sugerencias de los ya registrados en la ciudad); si no existe, se crea. */
+function campoSector(prefijo, ayuda = "Barrio. Si no está en la lista, se registra al guardar.") {
+    const lista = nuevoId("sectores");
+    const nodo = campo({ nombre: `${prefijo}sector`, etiqueta: "Sector", requerido: true, max: 80, ayuda });
+    nodo.querySelector("input").setAttribute("list", lista);
+    nodo.append(el("datalist", { id: lista }));
+    return nodo;
+}
+/** Al elegir la ciudad, sugiere sus sectores. */
+function conectarSectores(form, prefijo) {
+    const ciudad = form.elements.namedItem(`${prefijo}idCiudad`);
+    const sector = form.elements.namedItem(`${prefijo}sector`);
+    if (!ciudad || !sector) return;
+    // se busca dentro del form: puede que aun no este en la pagina
+    const datalist = form.querySelector(`datalist[id="${sector.getAttribute("list")}"]`);
+    const llenar = async () => {
+        const id = Number(ciudad.value);
+        const sectores = id ? await cargarSectores(id).catch(() => []) : [];
+        montar(datalist, ...sectores.map((s) => el("option", { value: s.nombre })));
+    };
+    ciudad.addEventListener("change", llenar);
+    llenar();
+}
+function validarSector(form, errores, prefijo) {
+    const c = form.elements.namedItem(`${prefijo}sector`);
+    const m = validarValor(c.value.trim(), { etiqueta: "Sector", requerido: true, patron: "nombre", max: 80 });
+    marcarCampo(c, m);
+    if (m) errores.push({ control: c, mensaje: m });
+}
+
 /** Campos de direccion (dentro de un fieldset). prefijo evita choques de nombre. */
 function camposDireccion(ciudades, prefijo = "dir_") {
     return [
         campo({ nombre: `${prefijo}idCiudad`, etiqueta: "Ciudad", tipo: "seleccion", requerido: true, opciones: ciudades }),
+        campoSector(prefijo),
         campo({ nombre: `${prefijo}callePrincipal`, etiqueta: "Calle principal", requerido: true, max: 120 }),
         campo({ nombre: `${prefijo}numero`, etiqueta: "Número", max: 15 }),
         campo({ nombre: `${prefijo}calleSecundaria`, etiqueta: "Calle secundaria", max: 120 }),
@@ -39,7 +77,7 @@ function camposDireccion(ciudades, prefijo = "dir_") {
 }
 function leerDireccion(form, prefijo = "dir_") {
     const v = (n) => form.elements.namedItem(`${prefijo}${n}`)?.value.trim() ?? "";
-    const d = { idCiudad: Number(v("idCiudad")) || null, callePrincipal: v("callePrincipal") };
+    const d = { idCiudad: Number(v("idCiudad")) || null, sector: v("sector"), callePrincipal: v("callePrincipal") };
     for (const n of ["numero", "calleSecundaria", "referencia"]) if (v(n)) d[n] = v(n);
     return d;
 }
@@ -51,6 +89,7 @@ function validarDireccion(form, errores, prefijo = "dir_") {
     marcarCampo(ciudad, m1);
     marcarCampo(calle, m2);
     if (m1) errores.push({ control: ciudad, mensaje: m1 });
+    validarSector(form, errores, prefijo);
     if (m2) errores.push({ control: calle, mensaje: m2 });
 }
 
@@ -71,7 +110,10 @@ export function formularioCliente({ ciudades, sugerido = "", requiereDireccion =
         campo({ nombre: "idTipoIdentificacion", etiqueta: "Tipo de identificación", tipo: "seleccion", requerido: true, opciones: TIPOS_ID, valor: esNumero && sugerido.trim().length === 13 ? "04" : "05" }),
         campo({ nombre: "identificacion", etiqueta: "Identificación", requerido: true, max: 20, valor: esNumero ? sugerido.trim() : "" }),
         campo({ nombre: "razonSocial", etiqueta: "A nombre de (razón social)", requerido: true, max: 150, ayuda: "Como debe salir en la factura" }),
-        campo({ nombre: "correoFactura", etiqueta: "Correo para la factura", tipo: "correo", max: 120 }));
+        campo({ nombre: "correoFactura", etiqueta: "Correo para la factura", tipo: "correo", max: 120 }),
+        // sector obligatorio en la factura (la direccion no)
+        campo({ nombre: "fac_idCiudad", etiqueta: "Ciudad", tipo: "seleccion", requerido: true, opciones: ciudades }),
+        campoSector("fac_"));
     const fsFact = el("fieldset", { class: "mb-3" },
         el("legend", { class: "form-label fs-6 fw-semibold" }, "Datos de facturación"),
         radiosFact.map(([v, t]) => {
@@ -100,6 +142,8 @@ export function formularioCliente({ ciudades, sugerido = "", requiereDireccion =
         zonaDireccion,
         el("div", { class: "d-flex flex-wrap gap-2 mt-3" }, boton));
 
+    conectarSectores(form, "fac_");
+    conectarSectores(form, "dir_");
     // la razon social se propone con el nombre
     form.elements.namedItem("nombres").addEventListener("change", () => {
         const rs = form.elements.namedItem("razonSocial");
@@ -124,6 +168,8 @@ export function formularioCliente({ ciudades, sugerido = "", requiereDireccion =
             marcar("identificacion", errorIdentificacion(v("idTipoIdentificacion"), v("identificacion")));
             marcar("razonSocial", validarValor(v("razonSocial"), { etiqueta: "Razón social", requerido: true, patron: "nombre", max: 150 }));
             marcar("correoFactura", v("correoFactura") ? validarValor(v("correoFactura"), { etiqueta: "Correo", patron: "correo", tipo: "correo" }) : null);
+            marcar("fac_idCiudad", v("fac_idCiudad") ? null : "Elige la ciudad del sector.");
+            validarSector(form, errores, "fac_");
         }
         const usarDir = casillaDir.checked;
         if (usarDir) validarDireccion(form, errores);
@@ -135,7 +181,8 @@ export function formularioCliente({ ciudades, sugerido = "", requiereDireccion =
         if (v("correo")) datos.correo = v("correo").toLowerCase();
         if (modo === "consumidor") datos.facturacion = { consumidorFinal: true };
         if (modo === "identificado") {
-            datos.facturacion = { idTipoIdentificacion: v("idTipoIdentificacion"), identificacion: v("identificacion").toUpperCase(), razonSocial: v("razonSocial") };
+            datos.facturacion = { idTipoIdentificacion: v("idTipoIdentificacion"), identificacion: v("identificacion").toUpperCase(), razonSocial: v("razonSocial"),
+                idCiudad: Number(v("fac_idCiudad")), sector: v("fac_sector") };
             if (v("correoFactura")) datos.facturacion.correo = v("correoFactura").toLowerCase();
         }
         if (usarDir) datos.direccion = leerDireccion(form);
@@ -153,7 +200,7 @@ export function formularioCliente({ ciudades, sugerido = "", requiereDireccion =
 }
 
 /** Datos de facturacion nuevos para un cliente que ya existe (la primera vez que pide factura). */
-export function formularioFacturacion({ nombreSugerido = "", direcciones = [], alGuardar }) {
+export function formularioFacturacion({ nombreSugerido = "", direcciones = [], ciudades = [], alGuardar }) {
     const resumen = resumenErrores();
     const boton = el("button", { type: "submit", class: "btn btn-primary" }, "Guardar y usar");
     const form = el("form", { novalidate: true }, resumen,
@@ -163,9 +210,17 @@ export function formularioFacturacion({ nombreSugerido = "", direcciones = [], a
             campo({ nombre: "razonSocial", etiqueta: "A nombre de (razón social)", requerido: true, max: 150, valor: nombreSugerido }),
             campo({ nombre: "correo", etiqueta: "Correo para la factura", tipo: "correo", max: 120 }),
             direcciones.length
-                ? campo({ nombre: "idDireccion", etiqueta: "Dirección (opcional)", tipo: "seleccion", opciones: direcciones.map((d) => ({ valor: d.id, etiqueta: d.etiqueta })) })
-                : null),
+                ? campo({ nombre: "idDireccion", etiqueta: "Dirección (opcional)", tipo: "seleccion", opciones: direcciones.map((d) => ({ valor: d.id, etiqueta: d.etiqueta })),
+                    ayuda: "Si eliges una, el sector sale de ella" })
+                : null,
+            // sector obligatorio (la direccion no): se pide si no se eligio direccion
+            campo({ nombre: "fac_idCiudad", etiqueta: "Ciudad", tipo: "seleccion", requerido: true, opciones: ciudades }),
+            campoSector("fac_")),
         el("div", { class: "d-flex flex-wrap gap-2 mt-2" }, boton));
+    conectarSectores(form, "fac_");
+    const zonaSector = [form.elements.namedItem("fac_idCiudad"), form.elements.namedItem("fac_sector")].map((c) => c.closest(".mb-3"));
+    const conDireccion = () => Boolean(form.elements.namedItem("idDireccion")?.value);
+    form.elements.namedItem("idDireccion")?.addEventListener("change", () => zonaSector.forEach((z) => { z.hidden = conDireccion(); }));
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const errores = [];
@@ -178,6 +233,10 @@ export function formularioFacturacion({ nombreSugerido = "", direcciones = [], a
         marcar("identificacion", errorIdentificacion(v("idTipoIdentificacion"), v("identificacion")));
         marcar("razonSocial", validarValor(v("razonSocial"), { etiqueta: "Razón social", requerido: true, patron: "nombre", max: 150 }));
         marcar("correo", v("correo") ? validarValor(v("correo"), { etiqueta: "Correo", patron: "correo", tipo: "correo" }) : null);
+        if (!conDireccion()) {
+            marcar("fac_idCiudad", v("fac_idCiudad") ? null : "Elige la ciudad del sector.");
+            validarSector(form, errores, "fac_");
+        }
         if (errores.length) return mostrarResumen(resumen, errores);
         mostrarResumen(resumen, []);
         boton.disabled = true;
@@ -187,7 +246,7 @@ export function formularioFacturacion({ nombreSugerido = "", direcciones = [], a
                 identificacion: v("identificacion").toUpperCase(),
                 razonSocial: v("razonSocial"),
                 ...(v("correo") ? { correo: v("correo").toLowerCase() } : {}),
-                ...(v("idDireccion") ? { idDireccion: Number(v("idDireccion")) } : {}),
+                ...(v("idDireccion") ? { idDireccion: Number(v("idDireccion")) } : { idCiudad: Number(v("fac_idCiudad")), sector: v("fac_sector") }),
             });
         } catch (error) {
             aplicarErroresApi(form, resumen, error);
@@ -204,6 +263,7 @@ export function formularioDireccion({ ciudades, alGuardar }) {
     const boton = el("button", { type: "submit", class: "btn btn-primary" }, "Guardar dirección");
     const form = el("form", { novalidate: true }, resumen, el("div", { class: "grilla-form" }, camposDireccion(ciudades, "")),
         el("div", { class: "d-flex flex-wrap gap-2 mt-2" }, boton));
+    conectarSectores(form, "");
     form.addEventListener("submit", async (e) => {
         e.preventDefault();
         const errores = [];

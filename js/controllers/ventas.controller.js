@@ -11,7 +11,7 @@ import { VentaModelo } from "../models/negocio.model.js";
 import { RecursoModelo } from "../models/recurso.model.js";
 import { ordenServidor, paramsOrden, alerta, campo, cargando, confirmar, dialogo, encabezado, insignia, notaObligatorios, paginacion, resumenErrores, tabla, zonaAlertas } from "../views/componentes.js";
 import { formulario } from "../views/formulario.js";
-import { formularioFacturacion } from "../views/venta.view.js";
+import { formularioFacturacion, usarSectores } from "../views/venta.view.js";
 
 const contenido = () => document.getElementById("contenido");
 const ESTADOS = { PEN: ["Pendiente de pago", "warning"], PAG: ["Pagado", "info"], FAC: ["Facturado", "primary"], DES: ["Despachado", "primary"], ENT: ["Entregado", "success"], CAN: ["Cancelado", "danger"] };
@@ -37,22 +37,33 @@ function dialogoFormulario({ titulo, campos, valores, textoEnviar, alEnviar, ayu
 // ------------------------------------------------------------------ Lista
 const estado = { page: 1, estado: "", canal: "", q: "", filas: [], meta: null };
 
-export async function pedidos({ consulta }) {
+// Pedidos (en curso o cancelados) y Ventas (facturadas o entregadas) por separado
+const GRUPOS = {
+    pedidos: { titulo: "Pedidos", descripcion: "Pedidos en curso: por pagar, pagados o en despacho (y los cancelados). Los de la tienda en línea llegan primero como cotizaciones.", estados: ["PEN", "PAG", "DES", "CAN"] },
+    ventas: { titulo: "Ventas", descripcion: "Ventas concluidas: facturadas o entregadas.", estados: ["FAC", "ENT"] },
+};
+
+/** Ventas concluidas (facturadas o entregadas). */
+export const realizadas = (params) => pedidos({ ...params, grupo: "ventas" });
+
+export async function pedidos({ consulta, grupo = "pedidos" }) {
     const alertas = zonaAlertas();
+    const g = GRUPOS[grupo];
+    if (estado.grupo !== grupo) Object.assign(estado, { grupo, page: 1, estado: "", q: "", canal: "" });
     if (consulta?.get("estado")) estado.estado = consulta.get("estado");
     montar(contenido(), cargando("Cargando pedidos…"));
     const ids = { q: nuevoId("q"), estado: nuevoId("estado"), canal: nuevoId("canal") };
     async function cargar() {
         try {
-            const { data, meta } = await VentaModelo.pedidos({ page: estado.page, limit: 20, estado: estado.estado, canal: estado.canal, q: estado.q, ...paramsOrden(estado) });
+            const { data, meta } = await VentaModelo.pedidos({ page: estado.page, limit: 20, grupo, estado: estado.estado, canal: estado.canal, q: estado.q, ...paramsOrden(estado) });
             Object.assign(estado, { filas: data, meta });
         } catch (error) {
             alertas.error(error, "No se pudieron cargar los pedidos");
         }
         montar(contenido(), el("section", { "aria-labelledby": "tituloVista" },
             encabezado({
-                titulo: "Pedidos",
-                descripcion: "Ventas de la tienda física, WhatsApp y el e-commerce.",
+                titulo: g.titulo,
+                descripcion: g.descripcion,
                 acciones: sesion.puede("VENTA_REGISTRAR") ? [el("a", { class: "btn btn-primary", href: "#/ventas/nueva" }, "Nueva venta en tienda")] : [],
             }),
             alertas.nodo,
@@ -68,13 +79,13 @@ export async function pedidos({ consulta }) {
                 el("div", {}, el("label", { class: "form-label", for: ids.q }, "Cliente o número"), el("input", { id: ids.q, name: "q", type: "search", class: "form-control", value: estado.q })),
                 el("div", {}, el("label", { class: "form-label", for: ids.estado }, "Estado"),
                     el("select", { id: ids.estado, name: "estado", class: "form-select" }, el("option", { value: "" }, "Todos"),
-                        Object.entries(ESTADOS).map(([v, [t]]) => el("option", { value: v, selected: estado.estado === v }, t)))),
+                        Object.entries(ESTADOS).filter(([v]) => g.estados.includes(v)).map(([v, [t]]) => el("option", { value: v, selected: estado.estado === v }, t)))),
                 el("div", {}, el("label", { class: "form-label", for: ids.canal }, "Canal"),
                     el("select", { id: ids.canal, name: "canal", class: "form-select" }, el("option", { value: "" }, "Todos"),
                         Object.entries(CANALES).map(([v, t]) => el("option", { value: v, selected: estado.canal === v }, t)))),
                 el("div", {}, el("button", { type: "submit", class: "btn btn-outline-primary w-100" }, "Aplicar"))),
             tabla({
-                titulo: "Pedidos",
+                titulo: g.titulo,
                 filas: estado.filas,
                 orden: ordenServidor(estado, cargar),
                 vacio: "No hay pedidos con esos filtros.",
@@ -291,10 +302,13 @@ export async function pedido({ id }) {
 
         // datos de facturacion nuevos, en el mismo dialogo
         const ficha = await VentaModelo.cliente(p.id_cliente).catch(() => ({ direcciones: [] }));
+        const ciudades = await RecursoModelo.opciones("ciudades").catch(() => []);
+        usarSectores(VentaModelo.sectores);
         zonaNuevo.append(el("p", { class: "fw-semibold" }, "Nuevos datos de facturación"),
             formularioFacturacion({
                 nombreSugerido: p.cliente,
                 direcciones: ficha.direcciones ?? [],
+                ciudades,
                 alGuardar: async (nuevos) => {
                     const r = await VentaModelo.agregarFacturacion(p.id_cliente, nuevos);
                     datos = r.cliente.facturacion;

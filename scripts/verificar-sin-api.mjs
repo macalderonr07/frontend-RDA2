@@ -80,6 +80,9 @@ try {
         return { ancho: s.outlineWidth, estilo: s.outlineStyle };
     });
     ok(contorno.ancho === "3px" && contorno.estilo === "solid", "foco visible: contorno sólido de 3 px", JSON.stringify(contorno));
+    const tienda = p.getByRole("link", { name: "Ir a la tienda en línea" });
+    ok((await tienda.count()) === 1 && (await tienda.getAttribute("href")) === "http://localhost:8080/",
+        "el ingreso tiene un enlace a la tienda (en local, el puerto 8080)", await tienda.getAttribute("href").catch(() => ""));
 
     await p.click("form button[type=submit]");
     ok(await p.evaluate(() => document.activeElement?.matches("[role=alert], .resumen-errores, [tabindex='-1']") && /Revisa estos datos/.test(document.activeElement.textContent)),

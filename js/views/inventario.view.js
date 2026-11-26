@@ -42,8 +42,9 @@ export function vistaListaInventario({ estado, acciones, alertas }) {
             }),
             el("div", { id: `${idQ}-ayuda`, class: "form-text" }, "Por código o nombre. La lista se actualiza mientras escribes.")),
         el("div", { class: "form-check form-switch align-self-center" },
-            el("input", { id: idReponer, name: "reponer", type: "checkbox", role: "switch", value: "1", class: "form-check-input", checked: estado.reponer, onchange: (e) => buscar(e.target.form) }),
-            el("label", { class: "form-check-label", for: idReponer }, "Solo los que hay que reponer")));
+            el("input", { id: idReponer, name: "reponer", type: "checkbox", role: "switch", value: "1", class: "form-check-input", checked: estado.reponer, "aria-describedby": `${idReponer}-ayuda`, onchange: (e) => buscar(e.target.form) }),
+            el("label", { class: "form-check-label", for: idReponer }, "Solo los que hay que reponer"),
+            el("div", { id: `${idReponer}-ayuda`, class: "form-text" }, "«Reponer»: lo disponible más lo que viene en camino llegó a la existencia mínima de la variante (se define en la ficha del producto).")));
 
     return el("section", { "aria-labelledby": "tituloVista" },
         encabezado({

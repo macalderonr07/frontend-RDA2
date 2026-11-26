@@ -16,6 +16,7 @@ import * as reportes from "./controllers/reportes.controller.js";
 import * as seguridad from "./controllers/seguridad.controller.js";
 import { tablero } from "./controllers/tablero.controller.js";
 import * as ventas from "./controllers/ventas.controller.js";
+import * as cotizaciones from "./controllers/cotizaciones.controller.js";
 import { AuthModelo } from "./models/auth.model.js";
 import { alerta, encabezado } from "./views/componentes.js";
 import { marcarMenu, vistaLogin, vistaMenu, vistaUsuario } from "./views/layout.view.js";
@@ -69,7 +70,9 @@ function menuDelUsuario(meta) {
             titulo: "Ventas",
             enlaces: [
                 ...(p("VENTA_REGISTRAR") ? [{ ruta: "/ventas/nueva", texto: "Nueva venta en tienda" }] : []),
+                { ruta: "/ventas/cotizaciones", texto: "Cotizaciones" },
                 { ruta: "/ventas", texto: "Pedidos" },
+                { ruta: "/ventas/realizadas", texto: "Ventas" },
                 { ruta: "/ventas/cobros", texto: "Cuentas por cobrar" },
                 ...generico("clientes"),
             ],
@@ -215,6 +218,9 @@ ruta("/compras/comprobantes", compras.comprobantes);
 ruta("/compras/:id", compras.orden);
 ruta("/ventas", ventas.pedidos);
 ruta("/ventas/nueva", ventas.nueva);
+ruta("/ventas/cotizaciones", cotizaciones.lista);
+ruta("/ventas/cotizaciones/:id", cotizaciones.ficha);
+ruta("/ventas/realizadas", ventas.realizadas);
 ruta("/ventas/cobros", ventas.cobros);
 ruta("/ventas/:id", ventas.pedido);
 ruta("/usuarios", seguridad.usuarios);

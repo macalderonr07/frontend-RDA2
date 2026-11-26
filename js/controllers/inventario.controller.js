@@ -84,7 +84,7 @@ function abrirAjuste(v, alTerminar) {
                     { valor: "INI", etiqueta: "Cargo el inventario inicial (entrada)" },
                 ],
             },
-            { nombre: "cantidad", etiqueta: `Cantidad${unidad}`, tipo: "cantidad", requerido: true },
+            { nombre: "cantidad", etiqueta: `Cantidad${unidad}`, tipo: "cantidad", paso: v.paso ?? 1, requerido: true },
             { nombre: "costoUnitario", etiqueta: "Costo unitario sin IVA (solo entradas)", tipo: "cantidad", patron: "costo", ayuda: "Inventario inicial: obligatorio. Sobrante: si se deja vacío, se usa el último costo." },
             { nombre: "motivo", etiqueta: "Motivo", tipo: "texto", patron: "texto", max: 200, requerido: true, ayuda: "Ej. Conteo del 22/11: 3 pares más" },
         ],
@@ -206,7 +206,7 @@ export async function producto({ id, consulta }) {
                     ayuda: `Saldo libre del lote: ${lote.libre} ${v.unidad}.`,
                     textoEnviar: "Registrar devolución",
                     campos: [
-                        { nombre: "cantidad", etiqueta: `Cantidad a devolver (${v.unidad})`, tipo: "cantidad", requerido: true },
+                        { nombre: "cantidad", etiqueta: `Cantidad a devolver (${v.unidad})`, tipo: "cantidad", paso: v.paso ?? 1, requerido: true },
                         { nombre: "motivo", etiqueta: "Motivo", tipo: "texto", patron: "texto", max: 200, requerido: true },
                     ],
                     alEnviar: async ({ cantidad, motivo }) => {

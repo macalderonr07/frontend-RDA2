@@ -8,7 +8,7 @@ import { ProductoModelo } from "../models/negocio.model.js";
 import { RecursoModelo } from "../models/recurso.model.js";
 import { ordenServidor, paramsOrden, alerta, cargando, confirmar, conservandoFoco, dialogo, encabezado, insignia, tabla, zonaAlertas } from "../views/componentes.js";
 import { formulario } from "../views/formulario.js";
-import { formasDeVenta, vistaAlta, vistaFicha, vistaLista } from "../views/productos.view.js";
+import { formasDeVenta, vistaAlta, vistaFicha, vistaLista, INCREMENTOS } from "../views/productos.view.js";
 
 const contenido = () => document.getElementById("contenido");
 const opciones = (ruta, filtros) => RecursoModelo.opciones(ruta, filtros).catch(() => []);
@@ -76,12 +76,12 @@ export async function nuevo() {
         return;
     }
     montar(contenido(), cargando());
-    const [categorias, unidades, tarifas, marcas] = await Promise.all(
-        ["categorias", "unidades-medida", "tarifas-iva", "marcas"].map((r) => opciones(r))
+    const [categorias, unidades, tarifas, marcas, proveedores] = await Promise.all(
+        ["categorias", "unidades-medida", "tarifas-iva", "marcas", "proveedores"].map((r) => opciones(r))
     );
     const alertas = zonaAlertas();
     montar(contenido(), vistaAlta({
-        opciones: { categorias, unidades, tarifas, marcas },
+        opciones: { categorias, unidades, tarifas, marcas, proveedores },
         alertas,
         acciones: {
             atributosDe: (idCategoria) => ProductoModelo.atributosDeCategoria(idCategoria),
@@ -190,6 +190,31 @@ export async function detalle({ id }) {
             ejecutar(() => ProductoModelo.actualizarFormaDeVenta(producto.idProducto, { descripcion: forma.descripcion, activa: !forma.activa }),
                 `Forma de venta ${forma.activa ? "desactivada" : "activada"}.`);
         },
+        agregarProveedor: async () => {
+            const ya = new Set((producto.proveedores ?? []).map((pv) => pv.idProveedor));
+            const opcionesProv = (await opciones("proveedores")).filter((o) => !ya.has(Number(o.valor)));
+            if (!opcionesProv.length) return alertas.info("Ya están todos los proveedores registrados.");
+            dialogoFormulario({
+                titulo: "Agregar proveedor",
+                textoEnviar: "Agregar",
+                campos: [
+                    { nombre: "idProveedor", etiqueta: "Proveedor", tipo: "seleccion", requerido: true, opciones: opcionesProv },
+                    { nombre: "codigoProveedor", etiqueta: "Código del proveedor (opcional)", tipo: "texto", patron: "codigo", max: 40, ayuda: "Como el proveedor llama a este producto en su factura" },
+                ],
+                alEnviar: async (datos) => {
+                    await ProductoModelo.agregarProveedor(producto.idProducto, { idProveedor: Number(datos.idProveedor), ...(datos.codigoProveedor ? { codigoProveedor: datos.codigoProveedor } : {}) });
+                    producto = await ProductoModelo.obtener(producto.idProducto);
+                    pintar("Proveedor agregado.");
+                },
+            });
+        },
+        quitarProveedor: async (pv) => {
+            if (!(await confirmar({ titulo: "Quitar proveedor", mensaje: `${pv.nombre} dejará de figurar como proveedor de este producto. ¿Continuar?`, textoConfirmar: "Quitar", peligro: true }))) return;
+            ejecutar(async () => {
+                await ProductoModelo.quitarProveedor(producto.idProducto, pv.idProveedor);
+                return ProductoModelo.obtener(producto.idProducto);
+            }, `${pv.nombre} ya no es proveedor de este producto.`);
+        },
         nuevaForma: () =>
             dialogoFormulario({
                 titulo: "Nueva forma de venta",
@@ -198,12 +223,12 @@ export async function detalle({ id }) {
                     { nombre: "descripcion", etiqueta: "Nombre", tipo: "texto", patron: "nombre", max: 40, requerido: true, ayuda: "Ej. Docena, Rollo × 50 m, 1/2 metro" },
                     { nombre: "factor", etiqueta: `Contenido en ${(producto.unidad ?? "").toLowerCase()}`, tipo: "cantidad", requerido: true },
                     { nombre: "cantidadMinima", etiqueta: "Compra mínima", tipo: "cantidad", requerido: true },
-                    { nombre: "incremento", etiqueta: "Se vende de a", tipo: "cantidad", requerido: true, ayuda: "1 = enteros; 0.25 = cuartos" },
+                    { nombre: "incremento", etiqueta: "Cómo se pide", tipo: "opciones", requerido: true, opciones: INCREMENTOS, ayuda: "Lo que el cliente puede pedir en la tienda y en el mostrador. «Cualquier decimal» para lo que se mide (cuero por pie²)." },
                     { nombre: "precioConIva", etiqueta: "Precio con IVA (USD)", tipo: "dinero", requerido: true, ayuda: `IVA de ${producto.porcentajeIva} % incluido` },
                 ],
                 valores: { cantidadMinima: 1, incremento: 1 },
                 alEnviar: async (datos) => {
-                    producto = await ProductoModelo.agregarFormaDeVenta(producto.idProducto, datos);
+                    producto = await ProductoModelo.agregarFormaDeVenta(producto.idProducto, { ...datos, incremento: Number(datos.incremento) });
                     pintar(`Forma de venta “${datos.descripcion}” agregada a todas las variantes.`);
                 },
             }),
@@ -218,7 +243,7 @@ export async function detalle({ id }) {
                 textoEnviar: "Crear variante",
                 campos: [
                     ...atributos.map((a) => ({ nombre: `a${a.idAtributo}`, etiqueta: a.nombre, tipo: "seleccion", requerido: true, opciones: a.valores.map((v) => ({ valor: v.idValorAtributo, etiqueta: v.valor })) })),
-                    { nombre: "stockMinimo", etiqueta: "Stock mínimo", tipo: "cantidad", ayuda: "Avisa para reponer por debajo de esta cantidad" },
+                    { nombre: "stockMinimo", etiqueta: `Existencia mínima (${producto.unidad})`, tipo: "cantidad", ayuda: `Punto de reposición, en ${producto.unidad}. Cuando lo disponible más lo que viene en camino baja a esta cantidad, la variante se marca «Reponer» en el inventario, sale en el reporte de productos por reponer y se sugiere en las órdenes de compra. 0 = no avisar.` },
                 ],
                 alEnviar: async (datos) => {
                     const valores = atributos.map((a) => Number(datos[`a${a.idAtributo}`]));
@@ -232,7 +257,7 @@ export async function detalle({ id }) {
                 titulo: `Variante ${v.sku}`,
                 textoEnviar: "Guardar",
                 campos: [
-                    { nombre: "stockMinimo", etiqueta: "Stock mínimo", tipo: "cantidad", requerido: true },
+                    { nombre: "stockMinimo", etiqueta: `Existencia mínima (${producto.unidad})`, tipo: "cantidad", requerido: true, ayuda: `Punto de reposición, en ${producto.unidad}. Cuando lo disponible más lo que viene en camino baja a esta cantidad, la variante se marca «Reponer» en el inventario, sale en el reporte de productos por reponer y se sugiere en las órdenes de compra. 0 = no avisar.` },
                     { nombre: "activa", etiqueta: "Activa (se puede vender)", tipo: "booleano" },
                 ],
                 valores: { stockMinimo: v.stockMinimo, activa: v.activa ? 1 : 0 },

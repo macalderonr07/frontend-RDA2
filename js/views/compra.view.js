@@ -200,8 +200,8 @@ export function bandasPorPaquete({ form, reglas, id, unidad, pendiente, maximo =
                 },
             };
             reglas.set(nombre(k), regla);
-            const nodo = campo({ nombre: nombre(k), etiqueta: `Banda ${k} (${unidad})`, tipo: "texto", requerido: true, valor: valores[i] ?? "" });
-            nodo.querySelector("input")?.setAttribute("inputmode", "decimal");
+            // selector numerico: el cuero se mide con cualquier decimal
+            const nodo = campo({ nombre: nombre(k), etiqueta: `Banda ${k} (${unidad})`, tipo: "cantidad", paso: 0.01, minimo: 0.01, requerido: true, valor: valores[i] ?? "" });
             nodo.querySelector("input")?.addEventListener("input", actualizarSuma);
             return nodo;
         }));

@@ -373,12 +373,17 @@ export function campo(def) {
     } else {
         const tipos = { correo: "email", telefono: "tel", url: "url", fecha: "date", entero: "text", cantidad: "text", dinero: "text", porcentaje: "text" };
         const numerico = ["entero", "cantidad", "dinero", "porcentaje"].includes(def.tipo);
+        // Con "paso" (cantidades de un producto) es un selector numerico que sube y
+        // baja segun como se maneja ese producto: 1 = enteros, 0.25 = cuartos...
+        const conPaso = numerico && Number(def.paso) > 0;
         control = el("input", {
             ...comunes,
-            type: tipos[def.tipo] ?? "text",
+            type: conPaso ? "number" : tipos[def.tipo] ?? "text",
             class: "form-control",
             value: def.valor === null || def.valor === undefined ? "" : def.tipo === "fecha" ? String(def.valor).slice(0, 10) : def.valor,
-            maxlength: def.max ?? null,
+            maxlength: conPaso ? null : def.max ?? null,
+            step: conPaso ? String(def.paso) : null,
+            min: conPaso ? String(def.minimo ?? 0) : null,
             inputmode: numerico ? "decimal" : def.tipo === "telefono" ? "tel" : null,
             autocomplete: def.autocompletar ?? "off",
         });

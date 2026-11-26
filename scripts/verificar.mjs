@@ -156,7 +156,7 @@ try {
         "/", "/productos", "/productos/nuevo", `/productos/${idProducto}`, "/ofertas", "/combos",
         "/inventario", `/inventario/${idVariante}`, "/compras", "/compras/nueva", "/compras/comprobantes",
         ...(idOrden ? [`/compras/${idOrden}`] : []),
-        "/ventas", "/ventas/nueva", "/ventas/cobros", ...(idPedido ? [`/ventas/${idPedido}`] : []),
+        "/ventas", "/ventas/nueva", "/ventas/cobros", "/ventas/cotizaciones", "/ventas/realizadas", ...(idPedido ? [`/ventas/${idPedido}`] : []),
         "/usuarios", "/roles", "/reportes", "/reportes/ventas-por-canal", "/mi-cuenta",
         ...meta.recursos.map((r) => `/r/${r.ruta}`),
         "/r/provincias/nuevo", "/r/proveedores/nuevo", "/r/empleados/nuevo",
@@ -247,7 +247,7 @@ try {
     ok(Boolean(sel), "las tablas sin paginar también tienen menú «Ordenar por» (para celular)");
     // Ficha del producto en pestanas (patron ARIA tabs, flechas del teclado)
     const tabs = await p.$$eval("[role=tablist] [role=tab]", (t) => t.map((x) => x.textContent));
-    ok(tabs.length === 4 && /Variantes/.test(tabs[0]), "ficha del producto en 4 pestañas", tabs.join(" | "));
+    ok(tabs.length === 5 && /Variantes/.test(tabs[0]) && tabs.some((x) => /Proveedores/.test(x)), "ficha del producto en 5 pestañas (con Proveedores)", tabs.join(" | "));
     await p.focus("[role=tablist] [role=tab][aria-selected=true]");
     await p.keyboard.press("ArrowRight");
     ok(await p.evaluate(() => document.activeElement.getAttribute("aria-selected") === "true" && /Formas de venta/.test(document.activeElement.textContent)
@@ -299,15 +299,26 @@ try {
     await p.locator("fieldset:has(legend:text('Valores de Color')) .form-check:has(label:text-is('Negro')) input").check();
     await p.locator("fieldset:has(legend:text('Valores de Color')) .form-check:has(label:text-is('Café')) input").check();
     ok(/Se crearán 2 variantes/.test(await p.textContent("[role=status][aria-live=polite]")), "vista previa: se crearán 2 variantes");
+    const comoSePide = p.locator("tbody tr:nth-child(1) select[name=forma_incremento]");
+    ok((await comoSePide.count()) === 1 && /Cualquier decimal/.test(await comoSePide.textContent()) && (await comoSePide.inputValue()) === "1",
+        "forma de venta: «Cómo se pide» se elige de una lista (enteros por defecto, o cualquier decimal)");
     await p.fill("tbody tr:nth-child(1) input[name=forma_precio]", "0.05");
     await p.click("text=Agregar forma de venta");
     await p.fill("tbody tr:nth-child(2) input[name=forma_descripcion]", "Docena");
     await p.fill("tbody tr:nth-child(2) input[name=forma_factor]", "12");
     await p.fill("tbody tr:nth-child(2) input[name=forma_precio]", "0.50");
+    // un producto debe tener al menos un proveedor
+    await p.click("button:text('Crear producto')");
+    await p.waitForTimeout(300);
+    ok(/Proveedores: marca al menos uno/.test(await p.textContent("form")), "sin proveedor no deja crear el producto (error en el resumen)");
+    await p.locator("input[name=idsProveedores]").first().check();
     await p.click("button:text('Crear producto')");
     await p.waitForFunction(() => /^CE-7\d{3} · /.test(document.getElementById("tituloVista")?.textContent ?? ""), null, { timeout: 20000 });
     ok(true, "el producto se creó con código automático " + (await p.textContent("#tituloVista")).split(" ")[0]);
     ok(await p.evaluate(() => document.querySelectorAll("#tituloVariantes ~ div tbody tr, section[aria-labelledby=tituloVariantes] tbody tr").length === 2), "ficha del producto con 2 variantes");
+    await p.click("[role=tab]:has-text('Proveedores')");
+    ok((await p.locator("section[aria-labelledby=tituloProveedores] tbody tr").count()) === 1, "la ficha muestra el proveedor elegido en la pestaña Proveedores");
+    await p.click("[role=tab]:has-text('Variantes')");
     await p.click("[role=tab]:has-text('Formas de venta')");
     await p.click("button[aria-label='Cambiar precio de Docena']");
     await p.waitForSelector(".modal.show input[name=precioConIva]");
@@ -363,6 +374,17 @@ try {
     await p.fill(".modal.show input[name=nombres]", `Calzado Visual ${unico}`);
     await p.fill(".modal.show input[name=razonSocial]", `Calzado Visual ${unico}`);
     await p.fill(".modal.show input[name=telefono]", "0987654321");
+    // sector obligatorio en la factura (la direccion no): sin el, no deja crear
+    await p.click(".modal.show button:text('Crear cliente y usarlo')");
+    await p.waitForTimeout(300);
+    ok(await p.$eval(".modal.show input[name=fac_sector]", (i) => i.getAttribute("aria-invalid") === "true"), "facturación sin sector: lo pide (la dirección no es obligatoria)");
+    await p.selectOption(".modal.show select[name=fac_idCiudad]", { label: "Quito" });
+    await p.waitForFunction(() => {
+        const s = document.querySelector(".modal.show input[name=fac_sector]");
+        return s && document.getElementById(s.getAttribute("list"))?.options.length > 0;
+    }, null, { timeout: 10000 });
+    ok(true, "al elegir Quito, el sector sugiere los barrios registrados");
+    await p.fill(".modal.show input[name=fac_sector]", "La Mariscal");
     await p.mouse.move(0, 0);
     const violCliente = await axe(p);
     ok(violCliente.length === 0, "alta de cliente sin violaciones de axe", violCliente.join(" | "));
@@ -556,6 +578,48 @@ try {
     ok(await p.evaluate(() => document.documentElement.getAttribute("translate") === "no"), "la página pide al navegador no traducirla (Ventas no pasa a «Vientos»)");
 
     // ------------------------------------------------------------ Unidad de compra (rollos)
+    seccion("Cotizaciones de la tienda: editar y confirmar como pedido");
+    {
+        const TIENDA = "http://localhost:5050/api/v1";
+        const tienda = async (ruta, metodo = "GET", cuerpo) => {
+            const x = await fetch(TIENDA + ruta, { method: metodo, headers: cuerpo ? { "Content-Type": "application/json" } : {}, body: cuerpo ? JSON.stringify(cuerpo) : undefined });
+            return (await x.json().catch(() => null))?.data;
+        };
+        const lista = (await tienda("/productos?limit=50")) ?? [];
+        const pres = lista.filter((x) => !x.porPieza && !x.cortesEstandar).flatMap((x) => x.presentaciones).find((x) => x.disponible >= 4 && Number.isInteger(x.incremento));
+        const carrito = await tienda("/carritos", "POST");
+        await tienda(`/carritos/${carrito.token}/items`, "POST", { idPresentacion: pres.idPresentacion, cantidad: Math.max(1, pres.cantidadMinima) });
+        await tienda(`/carritos/${carrito.token}/cliente`, "POST", { nombres: `Cotización Visual ${unico}`, correo: `cotvis.${unico}@example.com`, telefono: "0999999999" });
+        const cot = await tienda(`/carritos/${carrito.token}/pedido`, "POST", { observacion: "Prueba visual" });
+        await visitar(p, "/ventas/cotizaciones");
+        await p.waitForSelector(`a:has-text('${cot.numeroCotizacion}')`, { timeout: 15000 });
+        ok(true, `la cotización ${cot.numeroCotizacion} de la tienda aparece por confirmar`);
+        await p.mouse.move(0, 0);
+        const violLista = await axe(p);
+        ok(violLista.length === 0, "lista de cotizaciones sin violaciones de axe", violLista.join(" | "));
+        await p.click(`a:has-text('${cot.numeroCotizacion}')`);
+        await p.waitForSelector("button:text('Confirmar como pedido')");
+        ok(/Vence en 14 días|Vence en 13 días/.test(await p.textContent("#contenido")), "la ficha muestra cuándo vence (14 días)");
+        const cantidad = p.locator("#contenido table input[type=number]").first();
+        ok((await cantidad.getAttribute("step")) === String(pres.incremento), "la cantidad es un selector con el paso del producto");
+        await cantidad.fill("2");
+        await cantidad.dispatchEvent("change");
+        await p.waitForFunction(() => /actualizada/.test(document.getElementById("contenido")?.textContent ?? ""), null, { timeout: 10000 });
+        ok(true, "editar la cantidad de una línea la guarda");
+        await p.mouse.move(0, 0);
+        const violFicha = await axe(p);
+        ok(violFicha.length === 0, "ficha de la cotización sin violaciones de axe", violFicha.join(" | "));
+        await p.click("button:text('Confirmar como pedido')");
+        await p.click(".modal.show .btn-danger, .modal.show .btn-primary");
+        await p.waitForFunction(() => /^#\/ventas\/\d+$/.test(window.location.hash), null, { timeout: 15000 });
+        ok(true, "confirmar la convierte en pedido y lleva a su ficha " + (await p.evaluate(() => window.location.hash)));
+        const idPedidoCot = Number((await p.evaluate(() => window.location.hash)).split("/").pop());
+        await p.evaluate(async (id) => fetch(`${window.location.protocol}//${window.location.hostname}:5070/api/v1/ventas/pedidos/${id}/estado`, {
+            method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${localStorage.getItem("ce_admin_token")}` },
+            body: JSON.stringify({ estado: "CAN", observacion: "Prueba visual: se cancela" }),
+        }), idPedidoCot);
+    }
+
     seccion("Compras en la unidad del proveedor");
     await visitar(p, "/compras/nueva");
     await p.selectOption("select[name=idProveedor]", { index: 1 });
@@ -603,13 +667,15 @@ try {
     await cuenta.waitFor();
     ok((await p.locator(".modal.show input[name^=l]").count()) === 0 && !/código del lote/i.test(await p.textContent(".modal.show form")),
         "la recepción no pide códigos de lote (los genera la base)");
+    ok((await cuenta.getAttribute("type")) === "number" && (await cuenta.getAttribute("step")) === "1", "la cantidad de bandas es un selector numérico de enteros");
     const idLinea = (await cuenta.getAttribute("name")).slice(1);
     const bandas = p.locator(`.modal.show input[name^=m${idLinea}_]`);
     await cuenta.fill("3");
     ok((await bandas.count()) === 3 && (await p.isVisible(`.modal.show label:text-is('Banda 3 (pie2)'), .modal.show label:has-text('Banda 3')`)),
         "al escribir 3 bandas aparecen 3 campos de medida, cada uno con su etiqueta");
+    ok((await bandas.nth(0).getAttribute("type")) === "number" && (await bandas.nth(0).getAttribute("step")) === "0.01", "la medida de cada banda es un selector que acepta cualquier decimal");
     await bandas.nth(0).fill("6");
-    await bandas.nth(1).fill("7,5");
+    await bandas.nth(1).fill("7.5");
     ok(/Suman 13,5/.test(await p.textContent(".modal.show fieldset")), "la suma de las bandas se actualiza al escribir (13,5 de 20)");
     await p.mouse.move(0, 0);
     const violRecepcion = await axe(p);
@@ -618,13 +684,13 @@ try {
     await p.waitForFunction(() => document.activeElement?.closest("[role=alert], .resumen-errores, [tabindex='-1']") !== null, null, { timeout: 5000 }).catch(() => {});
     ok(await bandas.nth(2).evaluate((i) => i.getAttribute("aria-invalid") === "true"), "una banda sin medida no deja registrar: queda marcada como inválida");
     await cuenta.fill("2");
-    ok((await bandas.count()) === 2 && (await bandas.nth(1).inputValue()) === "7,5", "bajar a 2 bandas conserva las medidas ya escritas");
+    ok((await bandas.count()) === 2 && (await bandas.nth(1).inputValue()) === "7.5", "bajar a 2 bandas conserva las medidas ya escritas");
     await cuenta.fill("3");
     await bandas.nth(2).fill("10");
     await p.click(".modal.show button[type=submit]");
     await p.waitForTimeout(500);
     ok(/suman 23,5/i.test(await p.textContent(".modal.show")), "si las bandas suman más que lo pendiente (23,5 de 20) lo avisa y no registra");
-    await bandas.nth(2).fill("5,25");
+    await bandas.nth(2).fill("5.25");
     await p.click(".modal.show button[type=submit]");
     await p.waitForSelector(".modal", { state: "detached", timeout: 15000 })
         .catch(async () => { throw new Error(`la recepción de bandas no se registró: ${(await p.textContent(".modal.show")).replace(/\s+/g, " ").slice(0, 700)}`); });
